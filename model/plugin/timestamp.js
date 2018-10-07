@@ -1,8 +1,8 @@
 "use strict";
 
-const console = require('../stdio.js').Get('model/timestamp-plugin', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/timestamp', { minLevel: 'log' });	// log verbose debug
 // const inspect = require('./utility.js').makeInspect({ depth: 2, compact: true /* false */ });
-const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
+const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const _ = require('lodash');
 const Q = require('q');
 
@@ -44,4 +44,4 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		this._ts.deletedAt = timestamp;
 		return Q(this);
 	});
-}
+};

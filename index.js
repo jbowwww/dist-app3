@@ -10,5 +10,36 @@
  */
 
 // Don't know what if anything to actually put in this file just seemed a good place to put a quick readme in
- 
-require('./model/filesystem');
+
+"use strict";
+
+const console = require('./stdio.js').Get('index', { minLevel: 'debug' });	// debug verbose log
+const inspect = require('./utility.js').makeInspect({ depth: 2, breakLength: 0, compact: false });
+const util = require('util');
+const _ = require('lodash');
+const fs = require('fs');
+const nodePath = require('path');
+const Q = require('q');
+Q.longStackSupport = true;
+const mongoose = require('mongoose');
+mongoose.Promise = Q;
+const fsIterate = require('./fs/iterate.js');
+
+var stats = { dirs: 0, files: 0 };
+const debug = (prefix, obj) => console.debug(prefix + ': ' + inspect(obj));
+
+mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true }).then((...args) => {
+	console.verbose(`mongoose.connect.then: args=${inspect(args)}`);
+}).then(() => {
+fsIterate({
+	path: '/home/jk',
+	maxDepth: 1,
+	includeTopLevelDirectory: false,
+	dirHandler(dir) { debug('dir', dir); return dir.bulkSave().tap(() => stats.dirs++); },
+	fileHandler(file) { debug('file', file); return file.bulkSave().tap(() => stats.files++); },
+	errHandler(err) { console.error(`error: ${err.stack||err}`); }
+}).then(() => {
+	console.log(`fsIterate: ${inspect(stats)}\nmodels[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`);
+	return mongoose.connection.close();
+}).catch(err => console.error(`error: ${err.stack||err}`));
+});

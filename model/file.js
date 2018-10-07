@@ -1,32 +1,33 @@
 "use strict";
 
-const console = require('../../stdio.js').Get('model/file-schema', { minLevel: 'log' });	// log verbose debug
-// const inspect = require('./utility.js').makeInspect({ depth: 2, compact: true /* false */ });
-const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
-const baseFs = require('../../fs.js');
+const console = require('../stdio.js').Get('model/file-schema', { minLevel: 'verbose' });	// log verbose debug
+const inspect = require('../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
+const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
+const hashFile = require('../fs/hash.js');
 const _ = require('lodash');
 const Q = require('q');
 const mongoose = require('mongoose');
+const FsEntry = require('./fs-entry.js');
 
-let fileSchema = new mongoose.Schema({
+let file = new mongoose.Schema({
 	hash: { type: String, required: false }
 });
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
-fileSchema.virtual('extension').get(function extension() {
+file.virtual('extension').get(function extension() {
 	var n = this.path.lastIndexOf('.');
 	var n2 = Math.max(this.path.lastIndexOf('/'), this.path.lastIndexOf('\\'));
 	return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
 });
 
-fileSchema.query.hasHash = function() { return this.exists('hash'); };
+file.query.hasHash = function() { return this.exists('hash'); };
 
 var stats = {};	// very temporary hack/fix
 
 /* Ensures the file doc ('this') has a hash value, and that the doc's updatedAt is more recent than the file's mtime ('stats.mtime')
  * returns: the file/this, with hash calculated
  */
-fileSchema.methods.ensureCurrentHash = function(cb) {
+file.methods.ensureCurrentHash = function(cb) {
 	var file = this;
 	var artefact = this.$parent;
 	var model = this.constructor;
@@ -65,7 +66,7 @@ fileSchema.methods.ensureCurrentHash = function(cb) {
 			if (!oldHash) { console.verbose(`${debugPrefix}.ensureCurrentHash: file='${file.path}' undefined file.hash, hashing...`); }
 			else { console.verbose(`${debugPrefix}.ensureCurrentHash: file='${file.path}' outdated file.hash=..${file.hash.substr(-6)}, hashing...`); }
 			// return model._hashQueue.push(file).then(file => { if (cb) cb(null, file); return file; });
-			baseFs.hash(file.path).then((hash) => {
+			hashFile(file.path).then((hash) => {
 				if (!oldHash) { stats.ensureCurrentHash.hashCreated++; }
 				else { stats.ensureCurrentHash.hashUpdated++; }
 				file.hash = hash;
@@ -98,7 +99,7 @@ fileSchema.methods.ensureCurrentHash = function(cb) {
  * a nice intuitive syntax with method chaining, like :
  * models.fs.file.aggregate.match({path: / *regex to match e.g. video extensions like mpg * /}).groupBySizeAndHash().minimumDuplicateCount(2)
 */
-fileSchema.aggregates = {
+file.aggregates = {
 	match(query) {
 		return [ { $match: query } ];
 	},
@@ -128,4 +129,15 @@ fileSchema.aggregates = {
 	}
 };
 
-module.exports = fileSchema;
+// _.each([
+// 	require('./plugin/timestamp.js'),
+// 	require('./plugin/bulk-save.js'),
+// 	require('./plugin/stat.js'),
+// ], plugin => file.plugin(plugin));
+
+// file.plugin(require('./plugin/timestamp.js'));
+// file.plugin(require('./plugin/bulk-save.js'));
+// file.plugin(require('./plugin/stat.js'));
+
+console.verbose(`fileSchema: ${inspect(file)}`);
+module.exports = FsEntry.discriminator('File', file);
