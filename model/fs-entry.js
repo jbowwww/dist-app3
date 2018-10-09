@@ -1,7 +1,7 @@
 "use strict";
 
-// const console = require('../stdio.js').Get('model/filesystem', { minLevel: 'verbose' });	// log verbose debug
-// const inspect = require('./utility.js').makeInspect({ depth: 2, compact: true /* false */ });
+const console = require('../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
+const inspect = require('../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 // const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
 // const _ = require('lodash');
 // const Q = require('q');
@@ -36,15 +36,27 @@ var statSchema = new mongoose.Schema({
 
 var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true },
-	stats : statSchema,
-	fileType: { type: String, getter: () => (this.stats.isFile()?'File':stats.isDirectory()?'Dir':'Unknown') }
+	stats : statSchema
 }, {
 	discriminatorKey: 'fileType'
 });
 
-fsEntry.plugin(timestampPlugin);
+// fsEntry.method('test', () => {
+// 	console.log(`fsEntry.test(): this=${inspect(this)}`);
+// });
+// fsEntry.pre('test', () => {
+// 	console.log(`fsEntry.pre('test'): this=${inspect(this)}`);
+// });
+
+// fsEntry.post('test', () => {
+// 	console.log(`fsEntry.post('test'): this=${inspect(this)}`);
+// });
+
+// fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
-fsEntry.plugin(statPlugin);
+// fsEntry.plugin(statPlugin);
 
 module.exports = mongoose.model('fs', fsEntry);
+
+console.verbose(`FsEntry: ${inspect(module.exports)}, FsEntry.prototype: ${inspect(module.exports.prototype)}, FsEntry.schema.childSchemas=${inspect(module.exports.schema.childSchemas, { depth: 2 })}	`);	//fsEntry: ${inspect(fsEntry)}, 

@@ -12,6 +12,10 @@ mongoose.Promise = Q.Promise;
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
+	/* Updates an (in memory, not DB) document with values in the update parameter,
+	 * but only marks paths as modified if the (deep-equal) value actually changed
+	 * I think mongoose is supposed to be able to doc.set() and only mark paths and subpaths that have actually changed, 
+	 * but it hasn't wqorked for me in the past, so i wrote my own. */
 	schema.method('updateDocument', function(update, pathPrefix = '') {
 		if (pathPrefix !== '' && !pathPrefix.endsWith('.')) {
 			pathPrefix += '.';
@@ -33,8 +37,15 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		return Q(this);
 	});
 
+	/* Find a document in the DB given the query, if it exists, and update the (in memory) document with supplied data.
+	 * Or just create a new doc (in memory, not DB - uses constructor func and not model.create())
+	 * If the schema has a discriminatorKey, checks incoming data object for that key and uses the corresponding discriminator model's functions
+	 * That way this plugin overall should work on schemas with discriminators or without, or both (I think) - e.g. FsEntry and File */
 	schema.static('findOrCreate', function findOrCreate(query, data, cb) {
-		return Q(this.findOne(query).then(r => r ? r.updateDocument(data) : this.create(data)));
+		var dk = schema.options.discriminatorKey;
+		var model = dk ? this.discriminators[data[dk]] : this;
+		console.verbose(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data.path='${data.path}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : new (model)(data)));	//new (this)(data)));//this.create(data)));
 	});
 
 };

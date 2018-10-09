@@ -1,6 +1,5 @@
 "use strict";
-
-const console = require('../stdio.js').Get('model/file-schema', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../stdio.js').Get('model/file', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../fs/hash.js');
@@ -136,8 +135,10 @@ file.aggregates = {
 // ], plugin => file.plugin(plugin));
 
 // file.plugin(require('./plugin/timestamp.js'));
+// file.plugin(require('./plugin/standard.js'));
 // file.plugin(require('./plugin/bulk-save.js'));
-// file.plugin(require('./plugin/stat.js'));
+file.plugin(require('./plugin/stat.js'));
 
-console.verbose(`fileSchema: ${inspect(file)}`);
-module.exports = FsEntry.discriminator('File', file);
+module.exports = FsEntry.discriminator('file', file);
+
+console.verbose(`File.bulkSave: ${/*inspect*/(module.exports.bulkSave)}, File.prototype.bulkSave: ${/*inspect*/(module.exports.prototype.bulkSave)}`);

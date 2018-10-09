@@ -15,19 +15,18 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 		batchTimeout: 750
 	}, options);
 
-	console.debug(`bulkSaveSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}`);
+	// console.debug(`bulkSaveSchemaPlugin(): `);//schema=${inspect(schema)}, options=${inspect(options)}`);
 
-	schema.method('bulkSave', function bulkSave(maxBatchSize = 10/*options.maxBatchSize*/, batchTimeout = 750 /*options.batchTimeout*/) {
+	schema.method('bulkSave', function bulkSave(maxBatchSize = options.maxBatchSize, batchTimeout = options.batchTimeout) {
 
 		var model = this.constructor;
 		var doc = this;
 
-		console.debug(`bulkSaveSchemaPlugin(): model.modelName=${model.modelName} doc.isNew=${doc.isNew}`);
+		console.debug(`bulkSave(): model.modelName=${model.modelName} doc.isNew=${doc.isNew}`);
 
 		return Q.Promise((resolve, reject, notify) => {
 		
 			doc.validate().then(() => {
-				// model._stats.updateBulkOp(doc, `${model.modelName}.bulkSave`);
 					
 				var bsOp =
 					doc.isNew 								?	{ insertOne: { document: doc.toObject() } }
@@ -35,8 +34,10 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				: 	null;
 
 				if (bsOp === null) {
+					model._stats.bulkSave.items.unmodified++;
 					console.warn(`${model.modelName}.bulkSave unmodified doc=${inspect(doc._doc)}`);
 				} else {
+					model._stats.bulkSave.items[_.keys(bsOp)[0]]++;
 					if (!model._bulkSave) {
 						model._bulkSave = [];
 					}
@@ -56,20 +57,21 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				resolve(doc);
 				
 				function innerBulkSave() {
+
+					// 181008: I think I need to put most, if not all of these plugins' functionality back into the one plugin. They're too tghtly coupled,
+					// Especially if you want to have meaningful _stats values
+					model._stats.bulkSave.calls++;
+					
 					var bs = model._bulkSave;
 					model._bulkSave = [];
 					delete model._bulkSaveTimeout;
-					// model._stats.updateBulkOp(bs.length);
 					console.debug(`${model.modelName}.bulkWrite([${bs.length}]=${inspect(bs, { depth: 3, compact: true })}`);
-					model.bulkWrite(bs)
-					// .catch(err => {
-					// 	reject(err);
-					// 	// model._stats.updateError(err, `${model.modelName}.bulkSave error: ${inspect(err)}`);
-					// })
-					.then(bulkWriteOpResult => {
-						// model._stats.bulkOpSuccess++;
+					
+					model.bulkWrite(bs).then(bulkWriteOpResult => {
+						model._stats.bulkSave.success++;
 						console.debug(`${model.modelName}.innerBulkSave(): bulkWriteOpResult=${inspect(bulkWriteOpResult)}`);
 					}).catch(err => {	
+						model._stats.bulkSave.errors.push(err);
 						console.error(`bulkWriteError: ${err.stack||err}`);
 						reject(err);
 					}).done();
@@ -78,4 +80,27 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 		});
 	});
 
+
+
+	schema.pre('bulkWrite', function(next) {
+		console.verbose(`  !!!!!!!!      stat: pre('bulkWrite')`);
+		// this.constructor._stats.bulkSave.calls++;
+		return next();
+	});
+	
+	schema.pre('bulkSave', function(next) {
+		console.verbose(`stat: pre('bulkSave')`);
+		// this.constructor._stats.bulkSave.calls++;
+		return next();
+	});
+	schema.post('bulkSave', function(doc, next) {
+		console.verbose(`stat: post('bulkSave')`);
+		// this.constructor._stats.bulkSave.success++;
+		return next();
+	});
+	schema.post('bulkSave', function(err, doc, next) {
+		console.verbose(`stat: post('bulkSave') error: ${err.stack||err.message||err}`);
+		// this.constructor._stats.bulkSave.errors.push(err);
+		return next(err);
+	});
 };
