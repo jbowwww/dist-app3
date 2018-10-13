@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/find-or-create', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -43,8 +43,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * That way this plugin overall should work on schemas with discriminators or without, or both (I think) - e.g. FsEntry and File */
 	schema.static('findOrCreate', function findOrCreate(query, data, cb) {
 		var dk = schema.options.discriminatorKey;
-		var model = dk ? this.discriminators[data[dk]] : this;
-		console.verbose(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data.path='${data.path}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
+		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
 		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : new (model)(data)));	//new (this)(data)));//this.create(data)));
 	});
 

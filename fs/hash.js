@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs', { minLevel: 'log' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/hash', { minLevel: 'log' });	// debug verbose log
 // console.debug(`utility.inspect: ${typeof require('./utility.js').makeInspect}`);
 
 // const	inspect = require('./utility.js').makeInspect({ depth: 2, breakLength: 0 })//()=>undefined

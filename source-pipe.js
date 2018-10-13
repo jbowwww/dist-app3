@@ -2,7 +2,7 @@
 "use strict";
 
 const console = require('./stdio.js').Get('bin/fs/source-pipe', { minLevel: 'log' });	// verbose debug log
-const stream = new require('stream');
+const stream = require('stream');
 const _ = require('lodash');
 const Q = require('q');
 const inspect = require('util').inspect;

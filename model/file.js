@@ -137,7 +137,7 @@ file.aggregates = {
 // file.plugin(require('./plugin/timestamp.js'));
 // file.plugin(require('./plugin/standard.js'));
 // file.plugin(require('./plugin/bulk-save.js'));
-file.plugin(require('./plugin/stat.js'));
+// file.plugin(require('./plugin/stat.js'));
 
 module.exports = FsEntry.discriminator('file', file);
 

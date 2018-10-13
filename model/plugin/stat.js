@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/stat', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/stat', { minLevel: 'log' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 // const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
@@ -10,71 +10,51 @@ const _ = require('lodash');
 
 module.exports = function statSchemaPlugin(schema, options) {
 	
-		console.debug(`statSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+	console.verbose(`statSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 
-	function getNewStatBasicCountsObject() {
-		return {
+	function getNewStatBasicCountsObject(extra) {
+		var statsInspect = function (depth, options) {
+		 	return inspect(_.mapValues(
+		 		_.omit(this, this.errors && this.errors.length ? [] : ['errors']),
+		 		(value, propName) => this[propName]),
+		 	{ compact: true });
+		};
+		var addStatsInspect = (statsObject) => _.set(statsObject, util.inspect.custom, statsInspect);
+		var s = addStatsInspect({
 			calls: 0,					// how many raw calls to the stat thing being counted, before succeeded or failed 
 			success: 0,					// how many calls to this stat succeeded 
 			get failed() { return this.errors.length; },	// how many failed (counts errors)	
 			get total() { return this.success + this.failed; },		// success + total
-			errors: [],										// errors
-			[util.inspect.custom](depth, options) {
-			 	return util.inspect(_.mapValues(
-			 		_.omit(this, this.errors.length ? [] : ['errors']),
-			 		(value, propName) => this[propName]),
-			 	{ compact: true });
-			}
-		};
-	}
-	function getNewStatObject() {
-		return {
-			validate: getNewStatBasicCountsObject(),
-			save: getNewStatBasicCountsObject(),
-		};
+			created: 0,
+			updated: 0,
+			checked: 0,
+			errors: []
+		});
+		_.assign(s, _.mapValues(extra, (value, key) => !_.isPlainObject(value) ? value : addStatsInspect(value)));
+		return s;
 	}
 
 	schema.on('init', model => {
-
-		// var statHolders = [ model, ..._.values(model.discriminators) ];//=> discriminator =>
-		console.debug(`schema.on('init'): model.modelName=${model.modelName}`);
-
-		_.forEach([ model /*, ..._.map(schema.childSchemas, sm => sm.model)*/ ], model => {
-			Object.defineProperty(model, '_stats', {
-				enumerable: true,
-				value: {
-					validate: getNewStatBasicCountsObject(),
-					save: getNewStatBasicCountsObject(),
-					bulkSave: _.extend(getNewStatBasicCountsObject(), {
-						items: {
-							insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
-							get total() { return this.inserts + this.updates }
-						}
-					}),
-					created: 0,
-					updated: 0,
-					checked: 0
-				}
-			});
-			console.verbose(`model[${model.modelName?model.modelName:'none'}]._stats = ${inspect(model._stats, {compact: true})}`);
+		Object.defineProperty(model, '_stats', {
+			enumerable: true,
+			value: {
+				validate: getNewStatBasicCountsObject(),
+				save: getNewStatBasicCountsObject(),
+				bulkSave: getNewStatBasicCountsObject({
+					items: {
+						insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
+						get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
+					}
+				})
+			}
 		});
-
-
-		// Object.defineProperty(model.prototype, 'bulkSave', {
-		// 	enumerable: true,
-		// 	value: () => {
-		// 		console.verbose(` ------ !!!!!!!!!! -----------\n\n---------- !!!!!!!!`);
-		// 	}
-		// });
-
-		// console.debug(`stat: schema.on init: model.modelName=${model.modelName} model=${inspect(model, { depth: 0 })}\nmodel._stats=${inspect(model._stats, { depth: 4 })}\nmodel.hooks=${inspect(model.hooks, { depth: 4 })}`);
-	
+		console.verbose(`schema.on('init'): model=${inspect(model)}`);
 	});
 
 	schema.pre('validate', function(next) {
 		console.debug(`stat: pre('validate')`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-		this.constructor._stats[actionType]++;
+		this.constructor._stats.validate[actionType]++;
 		this.constructor._stats.validate.calls++;
 		return next();
 	});
@@ -89,37 +69,21 @@ module.exports = function statSchemaPlugin(schema, options) {
 		return next(err);
 	});
 
-
 	schema.pre('save', function(next) {
-		console.verbose(`stat: pre('save')`);
+		console.debug(`stat: pre('save')`);
+		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
+		this.constructor._stats.save[actionType]++;
 		this.constructor._stats.save.calls++;
 		return next();
 	});
 	schema.post('save', function(doc, next) {
-		console.verbose(`stat: post('save')`);
+		console.debug(`stat: post('save')`);
 		this.constructor._stats.save.success++;
 		return next();
 	});
 	schema.post('save', function(err, doc, next) {
-		console.verbose(`stat: post('save') error: ${err.stack||err.message||err}`);
+		console.debug(`stat: post('save') error: ${err.stack||err.message||err}`);
 		this.constructor._stats.save.errors.push(err);
 		return next(err);
 	});
-
-
-	// schema.pre('bulkSave', function(next) {
-	// 	console.log(`stat: pre('bulkSave')`);
-	// 	this.constructor._stats.bulkSave.calls++;
-	// 	return next();
-	// });
-	// schema.post('bulkSave', function(doc, next) {
-	// 	console.log(`stat: post('bulkSave')`);
-	// 	this.constructor._stats.bulkSave.success++;
-	// 	return next();
-	// });
-	// schema.post('bulkSave', function(err, doc, next) {
-	// 	console.log(`stat: post('bulkSave') error: ${err.stack||err.message||err}`);
-	// 	this.constructor._stats.bulkSave.errors.push(err);
-	// 	return next(err);
-	// });
 };

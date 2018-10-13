@@ -55,7 +55,7 @@ var fsEntry = new mongoose.Schema({
 // fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
-// fsEntry.plugin(statPlugin);
+fsEntry.plugin(statPlugin);
 
 module.exports = mongoose.model('fs', fsEntry);
 

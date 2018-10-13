@@ -23,7 +23,8 @@ const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
 mongoose.Promise = Q;
-const sourcePipe = require('./source-pipe.js');
+const promisePipe = require('./promise-pipe.js');
+const pEvent = require('p-event');
 const fsIterate = require('./fs/iterate.js');
 const FsEntry = require('./model/fs-entry.js');
 const File = require('./model/file.js');
@@ -39,34 +40,16 @@ const debug = (prefix, obj) => {
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true }).then((...args) => {
 	console.debug(`mongoose.connect.then: args=${inspect(args)}`);
-}).then(() => {
-	sourcePipe(fsIterate({
-		path: '/home/jk',
-		maxDepth: 1,
-		// includeTopLevelDirectory: false,
-		// dirHandler(dir) { debug('dir', dir); stats.dirs++; dir.bulkSave(); /*dir.save();*/ },
-		// fileHandler(file) { debug('file', file); stats.files++; file.bulkSave(); /*file.save();*/ },
-		// errHandler(err) { console.error(`error: ${err.stack||err}`); }
-	}), [ 
-		
-		// fsEntry => {
-		// 	switch(fsEntry.fileType) {
-		// 		case 'dir': return Dir.findOrCreate({ path: fsEntry.Path }, fsEntry);
-		// 		case 'file': return File.findOrCreate({ path: fsEntry.Path }, fsEntry);
-		// 		default: console.warn(`fsIterate: Unknown fsEntry type for path '${fsEntry.path}'`);
-		// 	}
-		// }, 
-		// fsEntry =>  {
-		// 	console.debug(`fsEntry: ${typeof fsEntry} (doc=${fsEntry instanceof mongoose.Document}) type=${fsEntry.constructor.name}: ${inspect(fsEntry)}`);
-		// 	return fsEntry.bulkSave();
-		// }
-
-		// fsEntry => { console.debug(`fsEntry: ${typeof fsEntry} ${fsEntry instanceof mongoose.Document} ${inspect(fsEntry/*mongoose.Document.prototype*/)}`); debug(fsEntry.fileType, fsEntry); return fsEntry; },
+})
+.then(() =>	pEvent(fsIterate({ path: '/home/jk', maxDepth: 5 }).pipe(
+	promisePipe([
+		// fsEntry => { console.verbose(`fsEntry: ${inspect(fsEntry)}`); return fsEntry; },
 		fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
-		// fsEntry => { console.debug(`fsEntry: ${typeof fsEntry} ${fsEntry instanceof mongoose.Document} ${inspect(fsEntry/*mongoose.Document.prototype*/)}`); debug(fsEntry.fileType, fsEntry); return fsEntry; },
-		fsEntry => fsEntry./*constructor.model(fsEntry.fileType).*/bulkSave()
-	]).then(() => {
-		console.log(`fsIterate: ${inspect(stats)}\nmodels[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`);
-		return mongoose.connection.close();
-	}).catch(err => console.error(`error: ${err.stack||err}`))
-}).done();
+		fsEntry => fsEntry.bulkSave()
+	])
+), 'finish'))
+.delay(3000)
+.then(() => { console.log(`fsIterate: ${inspect(stats)}\nmodels[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
+.then(() => mongoose.connection.close())
+.catch(err => { console.error(`error: ${err.stack||err}`); })
+.done();

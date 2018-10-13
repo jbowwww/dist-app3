@@ -11,7 +11,7 @@ let dirSchema = new mongoose.Schema({
 // dirSchema.plugin(require('./plugin/timestamp.js'));
 // dirSchema.plugin(require('./plugin/standard.js'));
 // dirSchema.plugin(require('./plugin/bulk-save.js'));
-dirSchema.plugin(require('./plugin/stat.js'));
+// dirSchema.plugin(require('./plugin/stat.js'));
 
 module.exports = FsEntry.discriminator('dir', dirSchema);
 
