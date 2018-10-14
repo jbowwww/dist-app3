@@ -1,12 +1,13 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'log' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 // const util = require('util');
 const _ = require('lodash');
 const fs = require('fs');
 const nodePath = require('path');
 const Q = require('q');
+Q.longStackSupport = true;
 
 const fsLstat = Q.denodeify(fs.lstat);
 const fsReaddir = Q.denodeify(fs.readdir);
@@ -68,7 +69,7 @@ function iterate(options) {
 					return nextHandleError(err);
 				}
 				function nextHandleError(err) {
-					// console.warn(`iterate: ${err.stack||err}`);
+					console.warn(`iterate: ${err.stack||err}`);
 					self.errors.push(err);
 					process.nextTick(() => self.emit('error', err));
 					return next();//1;
@@ -79,8 +80,9 @@ function iterate(options) {
 	.on('close', (...args) => console.verbose(`iterate: close: ${inspect(args)}`))
 	.on('end', (...args) => console.verbose(`iterate: end: ${inspect(args)}`))
 	.on('error', (err, ...args) => console.warn(`iterate: err: ${err.stack||err} ${inspect(args)}`))
-	var r = self;//promisifyEmitter(self, { errorEvent: null });
-	r.promisePipe = function(writeable) {  return promisifyEmitter(r.pipe(writeable)); };//, { errorEvent: null }
+	return self;
+	// var r = self;//promisifyEmitter(self, { errorEvent: null });
+	// r.promisePipe = function(writeable) {  return promisifyEmitter(r.pipe(writeable)); };//, { errorEvent: null }
 	// r.then((...args) => { console.verbose(`iterate.then: ${inspect(args)}`); });
-	return r;
+	// return r;
 };

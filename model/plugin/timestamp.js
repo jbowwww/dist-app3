@@ -9,7 +9,7 @@ const Q = require('q');
 module.exports = function timestampSchemaPlugin(schema, options) {
 	schema.add({
 		_ts: {
-		createdAt: { type: Date, required: true, default: () => Date.now() },
+		createdAt: { type: Date, required: true/*, default: () => Date.now()*/ },
 		checkedAt: { type: Date, required: false },
 		updatedAt: { type: Date, required: false },
 		deletedAt: { type: Date, required: false }
@@ -22,16 +22,15 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		} else if (this._ts.created && this.isNew) {
 			return next(new Error(`${model.modelName}.pre('validate')#timestampSchemaPlugin: doc._ts.createdAt && this.isNew ${this.isModified()?'':'!'}this.isModified()`));
 		}
-		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
 		var now = Date.now();
-		// this._ts[actionType + 'At']  = new Date();	// cascade current timestamp across the create,updated,checked TS's
-		if (actionType === 'updated') {
-			this._ts.updatedAt = now;
+		if (this.isNew) {
+			this._ts.createdAt = this._ts.updatedAt = this._ts.checkedAt = now;
+		} else if (this.isModified()) {
+			this._ts.updatedAt = this._ts.checkedAt = now;
 		} else if (!this._ts.updatedAt) {
-			this._ts.updatedAt = this._ts.createdAt;
+			this._ts.checkedAt = now;
 		}
-		this._ts.checkedAt = now;	// changing semantics slightly to always update checkedAt, even if updatedAt updated. Hopefully makes querying for outdated data simpler by only requireing one comparison
-		console.verbose(`${model.modelName}.pre('validate')#timestampSchemaPlugin: actionType=${actionType} isNew=${this.isNew} ${this.modifiedPaths().join(' ')}`); //this=${inspectPretty(this.schema)} parent=${inspectPretty(this.$parent)}`);
+		console.verbose(`${model.modelName}.pre('validate')#timestampSchemaPlugin: isNew=${this.isNew} ${this.modifiedPaths().join(' ')}`); //this=${inspectPretty(this.schema)} parent=${inspectPretty(this.$parent)}`);
 		return next();
 	});
 

@@ -7,20 +7,24 @@ const console = require('../stdio.js').Get('fs/hash', { minLevel: 'log' });	// d
 // ,	_.mixin = require('./utility.js')._.mixin
 const _ = require('lodash')
 // , bindMethods = require('./utility.js').bindMethods
-// , pipeline = require('./utility.js').pipeline
+, pipeline = require('../utility.js').pipeline
 // ,	util = require('util')
 ,	fs = require('fs')
 // , nodePath = require('path')
 // , EventEmitter = require('events')//emitter3');
 // ,	stream = require('stream')
-// ,	Q = require('q')
+,	Q = require('q')
+Q.longStackSupport = true;
 // ,	promisifyEmitter = require('./utility.js').promisifyEmitter
-,	crypto = require('crypto');
+const crypto = require('crypto');
+const pEvent = require('p-event');
 
 // Returns promise for a hash string
 module.exports = function hash(path, options) {
 	var options = Object.assign({}, { algorithm: 'sha256', encoding: 'hex' }, options);
 	var hashStream = crypto.createHash(options.algorithm);
 	hashStream.setEncoding(options.encoding);
-	return pEvent(fs.createReadStream(path, options).pipe(hashStream), 'data').then(hashData => hashData.toString(options.encoding));
+	return Q(pEvent(pipeline(fs.createReadStream(path, options), hashStream), 'data'))
+	.then(hashData => hashData.toString(options.encoding))
+	// .catch(err => console.error(`Hashing error: ${err.stack||err}`));
 }

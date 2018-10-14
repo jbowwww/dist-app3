@@ -34,28 +34,34 @@ var statSchema = new mongoose.Schema({
 	_id: false 
 });
 
+// statSchema.pre('init', stats => {
+// 	console.log(`statSchema.pre('init'), ${typeof stats} ${stats.constructor.name} stats: ${inspect(stats)}`);
+// 	// this.type = stats.isFile() ? 'file' : stats.isDirectory() ? 'dir' : 'unknown'
+// });
+
+// statSchema.post('init', stats => {
+// 	console.log(`statSchema.post('init'), ${typeof stats} ${stats.constructor.name} stats: ${inspect(stats)}`);
+// 	// this.type = stats.isFile() ? 'file' : stats.isDirectory() ? 'dir' : 'unknown'
+// });
+
 var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true },
-	stats : statSchema
+	stats : { type: statSchema }, /*set: function (s) {
+		console.log(`set: s=${inspect(s)}`);
+		// this.set('stats', s, mongoose.SchemaTypes.Embedded);//statSchema);
+		// this.fileType = s.isFile() ? 'file' : s.isDirectory() ? 'dir' : 'unknown';
+		// console.log(`set: this.stats=${inspect(this.stats)}`);
+		// this.stats = s;
+		return s;
+	} }*/
 }, {
 	discriminatorKey: 'fileType'
 });
 
-// fsEntry.method('test', () => {
-// 	console.log(`fsEntry.test(): this=${inspect(this)}`);
-// });
-// fsEntry.pre('test', () => {
-// 	console.log(`fsEntry.pre('test'): this=${inspect(this)}`);
-// });
-
-// fsEntry.post('test', () => {
-// 	console.log(`fsEntry.post('test'): this=${inspect(this)}`);
-// });
-
-// fsEntry.plugin(timestampPlugin);
+fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
-fsEntry.plugin(statPlugin);
+// fsEntry.plugin(statPlugin);
 
 module.exports = mongoose.model('fs', fsEntry);
 

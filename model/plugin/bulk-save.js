@@ -10,6 +10,18 @@ mongoose.Promise = Q.Promise;
 
 module.exports = function bulkSaveSchemaPlugin(schema, options) {
 
+	schema.plugin(require('./stat.js'), {
+		data: {
+			bulkSave: {
+				items: {
+					insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
+					get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
+				}
+			}
+		}
+	});
+
+		
 	schema.method('bulkSave', function bulkSave(options) { //maxBatchSize = options.maxBatchSize, batchTimeout = options.batchTimeout) {
 
 		var model = this.constructor;

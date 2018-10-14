@@ -29,27 +29,19 @@ const fsIterate = require('./fs/iterate.js');
 const FsEntry = require('./model/fs-entry.js');
 const File = require('./model/file.js');
 const Dir = require('./model/dir.js');
-
-var stats = { dirs: 0, files: 0 };
-const debug = (prefix, obj) => {
-	// obj.test();
-	console.verbose(prefix + ': ' + typeof obj + ' ' 
-		+ (obj.modelName ? obj.modelName : obj.constructor && obj.constructor.name ? obj.constructor.name : '') 
-		+ inspect(obj));
-};
+const hashFile = require('./fs/hash.js');
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true }).then((...args) => {
 	console.debug(`mongoose.connect.then: args=${inspect(args)}`);
 })
-.then(() =>	pEvent(fsIterate({ path: '/home/jk', maxDepth: 5 }).pipe(
-	promisePipe([
-		// fsEntry => { console.verbose(`fsEntry: ${inspect(fsEntry)}`); return fsEntry; },
-		fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
-		fsEntry => fsEntry.bulkSave()
-	])
-), 'finish'))
-.delay(3000)
-.then(() => { console.log(`fsIterate: ${inspect(stats)}\nmodels[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
+.then(() =>	promisePipe(fsIterate({ path: '/home/jk', maxDepth: 2 }), [
+	fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
+	// promisePipe.conditional(fsEntry => fsEntry.fileType === 'file', fsEntry => fsEntry.ensureCurrentHash()),
+	fsEntry => fsEntry.fileType === 'file' ? fsEntry.ensureCurrentHash() : fsEntry,
+	fsEntry => fsEntry.bulkSave()
+]))
+.then(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
 .then(() => mongoose.connection.close())
+.then(() => { console.log(`mongoose.connection closed`); })
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 .done();
