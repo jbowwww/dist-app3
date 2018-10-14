@@ -1,15 +1,15 @@
 "use strict";
 
-const console = require('../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
-const inspect = require('../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
+const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 // const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
 // const _ = require('lodash');
 // const Q = require('q');
 const mongoose = require('mongoose');
-const timestampPlugin = require('./plugin/timestamp.js');
-const statPlugin = require('./plugin/stat.js');
-const bulkSavePlugin = require('./plugin/bulk-save.js');
-const standardPlugin = require('./plugin/standard.js');
+const timestampPlugin = require('../plugin/timestamp.js');
+const statPlugin = require('../plugin/stat.js');
+const bulkSavePlugin = require('../plugin/bulk-save.js');
+const standardPlugin = require('../plugin/standard.js');
 
 var statSchema = new mongoose.Schema({
 	"dev" : Number,
@@ -46,14 +46,8 @@ var statSchema = new mongoose.Schema({
 
 var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true },
-	stats : { type: statSchema }, /*set: function (s) {
-		console.log(`set: s=${inspect(s)}`);
-		// this.set('stats', s, mongoose.SchemaTypes.Embedded);//statSchema);
-		// this.fileType = s.isFile() ? 'file' : s.isDirectory() ? 'dir' : 'unknown';
-		// console.log(`set: this.stats=${inspect(this.stats)}`);
-		// this.stats = s;
-		return s;
-	} }*/
+	stats : { type: statSchema },
+	children: [{ type: mongoose.SchemaTypes.ObjectId, ref: String, default: undefined, required: false }]
 }, {
 	discriminatorKey: 'fileType'
 });
@@ -61,7 +55,7 @@ var fsEntry = new mongoose.Schema({
 fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
-// fsEntry.plugin(statPlugin);
+fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
 
 module.exports = mongoose.model('fs', fsEntry);
 

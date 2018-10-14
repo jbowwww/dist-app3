@@ -1,13 +1,13 @@
 "use strict";
-const console = require('../stdio.js').Get('model/file', { minLevel: 'verbose' });	// log verbose debug
-const inspect = require('../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
-const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
-const hashFile = require('../fs/hash.js');
+const console = require('../../stdio.js').Get('model/file', { minLevel: 'verbose' });	// log verbose debug
+const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
+const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
+const hashFile = require('../../fs/hash.js');
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-const FsEntry = require('./fs-entry.js');
+const FsEntry = require('./filesys-entry.js');
 
 let file = new mongoose.Schema({
 	hash: { type: String, required: false }
@@ -18,7 +18,7 @@ let file = new mongoose.Schema({
 // file.plugin(timestampPlugin);
 // file.plugin(require('./plugin/standard.js'));
 // file.plugin(require('./plugin/bulk-save.js'));
-file.plugin(require('./plugin/stat.js'), { data: { ensureCurrentHash: {} } });
+file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
 file.virtual('extension').get(function extension() {

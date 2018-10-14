@@ -6,11 +6,15 @@ const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: fal
 const _ = require('lodash');
 // const Q = require('q');
 
+//
+// 181014: TODO:?? Change this to a generic model static data member plugin (not just for stats objects)?
+//
+
 function getNewStatBasicCountsObject(extra) {
 	var statsInspect = ((indent = 0) => function (depth, options) {
 		var r = inspect(_.mapValues(_.omit(this, ['errors']), (value, propName) => this[propName]), { compact: true });
 	 	return !this.errors || !this.errors.length ? r
-	 	 : r.substring(0, r.length - 2) + '\n' + '\t'.repeat(indent+1) + 'Errors: ' + this.errors.join(',\n') + '\n' + '\t'.repeat(indent) + '}';
+	 	 : r.substring(0, r.length - 2) + '\n' + '\t'.repeat(indent+1) + 'Errors: ' + this.errors.map(err=>err.stack).join(',\n') + '\n' + '\t'.repeat(indent) + '}';
 	});
 	var addStatsInspect = (statsObject, indent) => _.set(statsObject, util.inspect.custom, statsInspect(indent)/*.bind(statsObject)*/);
 	var s = addStatsInspect({
@@ -28,14 +32,9 @@ function getNewStatBasicCountsObject(extra) {
 }
 
 module.exports = function statSchemaPlugin(schema, options) {
-
 	console.debug(`statSchemaPlugin(): options=${inspect(options)}, this=${inspect(this)}`);
-
-	if (schema._stats === undefined /*typeof schema._stats !== 'object'*/) {
-		Object.defineProperty(schema, '_stats', {
-			enumerable: true, writeable: true, configurable: true,
-			value: { }
-		});
+	if (schema._stats === undefined) {
+		Object.defineProperty(schema, '_stats', { enumerable: true, writeable: true, configurable: true, value: { } });
 	}
 	if (!options.data) {
 		throw new TypeError(`options.data must define properties for each piece of _stats data, optionally setting value to be extra/custom properties`);
@@ -43,14 +42,11 @@ module.exports = function statSchemaPlugin(schema, options) {
 	_.assign(schema._stats, options.data);//, (value, key) => getNewStatBasicCountsObject(options.data[key])));
 
 	schema.on('init', model => {
-
 		if (schema._stats !== undefined) {
 			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
 				_.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value))
 			});
 		}
-
 		console.debug(`schema.on('init'): model=${inspect(model)}`);
 	});
-
 };
