@@ -80,7 +80,15 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	/* Find a document in the DB given the query, if it exists, and update the (in memory) document with supplied data.
 	 * Or just create a new doc (in memory, not DB - uses constructor func and not model.create())
 	 * If the schema has a discriminatorKey, checks incoming data object for that key and uses the corresponding discriminator model's functions
-	 * That way this plugin overall should work on schemas with discriminators or without, or both (I think) - e.g. FsEntry and File */
+	 * That way this plugin overall should work on schemas with discriminators or without, or both (I think) - e.g. FsEntry and File
+	 * If I was using model.create() instead of the constructor I think it is *supposed* to handle that automagically (but who knows)
+	 * But that's not the behaviour I want - I don't want it saving or validating anything until it's explicitly told to (in bulk, usuallyt)
+	 * Then again - maybe validation would be handy e.g. for a file object, before it gets passed to e.g. the audio plugin (... oh god this shit's getting complicated again)
+	 * 181015 - So now added functionality where data can be a function instead of an obejct, where the function returns an object (the data)
+	 * when it's called - but it will only get called if the data 2wasn't found first. Saves expensive operations if unnecessary. (like mm.parseFile())) 
+	 * !! Hold on - the use case here for Audio is different to File. Even if a File is found this method still does updateDocument(data),
+	 * whereas with Audio I think I just want to skip it completley - unless the file has changed more recently than the Audio document was updated/checked 
+	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... */
 	schema.static('findOrCreate', function findOrCreate(query, data, cb) {
 		var dk = schema.options.discriminatorKey;
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;

@@ -47,8 +47,14 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 ))
 .then(() => promisePipe(
 	File.find({ path: { $regex: /.*\.(wav|au|mp3|flac)$/i } }).cursor(), [
-		file => mm.parseFile(file.path).then(
-			metadata => Audio.create({ fileId: file._id, length: 1, metadata }).then(
+		file => Audio.find({ fileId: file._id }).then(audio => {
+			if (!audio) audio = new Audio({ fileId : file._id});
+			if (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date())) {
+				console.verbose(`Audio.loadMetadata on '${file.path}' (${file.id})`);
+				audio.loadMetadata
+			}
+		} ) mm.parseFile(file.path).then(
+			metadata => /*Audio.create*/ Audio.findOrCreate({ fileId: file._id }, { fileId: file._id, length: 1, metadata }).then(
 				audio => { file.children.push(/*{ child:*/ audio/*._id, ref: 'Audio' }*/); return file; })),
 		file => { console.log(`file: ${inspect(file)}`); return file.bulkSave(); },
 		// metadata => { console.log(`metadata: ${inspect(metadata)}`); }
