@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -90,6 +90,14 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * whereas with Audio I think I just want to skip it completley - unless the file has changed more recently than the Audio document was updated/checked 
 	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... */
 	schema.static('findOrCreate', function findOrCreate(query, data, cb) {
+		if (!_.isPlainObject(query)) {
+			throw new TypeError(`query must be a plain object, but query=${inspect(query)}`);
+		} else if (typeof data === 'function' && !cb) {
+			cb = data;
+			data = query;
+		} else if (!data) {
+			data = query;
+		}
 		var dk = schema.options.discriminatorKey;
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);

@@ -10,13 +10,14 @@ const _ = require('lodash');
 // 181014: TODO:?? Change this to a generic model static data member plugin (not just for stats objects)?
 //
 
-function getNewStatBasicCountsObject(extra) {
 	var statsInspect = ((indent = 0) => function (depth, options) {
 		var r = inspect(_.mapValues(_.omit(this, ['errors']), (value, propName) => this[propName]), { compact: true });
 	 	return !this.errors || !this.errors.length ? r
-	 	 : r.substring(0, r.length - 2) + '\n' + '\t'.repeat(indent+1) + 'Errors: ' + this.errors.map(err=>err.stack).join(',\n') + '\n' + '\t'.repeat(indent) + '}';
+	 	 : r.substring(0, r.length - 2) + '\n' + '\t'.repeat(indent+1) + 'Errors: ' + this.errors.map(err=>err.message/*.stack*/).join(',\n') + '\n' + '\t'.repeat(indent) + '}';
 	});
 	var addStatsInspect = (statsObject, indent) => _.set(statsObject, util.inspect.custom, statsInspect(indent)/*.bind(statsObject)*/);
+
+function getNewStatBasicCountsObject(extra) {
 	var s = addStatsInspect({
 		calls: 0,												// how many raw calls to the stat thing being counted, before succeeded or failed 
 		success: 0,												// how many calls to this stat succeeded 
@@ -44,7 +45,7 @@ module.exports = function statSchemaPlugin(schema, options) {
 	schema.on('init', model => {
 		if (schema._stats !== undefined) {
 			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
-				_.assign({ errors: [] }, _.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value)))
+				/*addStatsInspect*/(_.assign({ errors: [] }, _.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value))))
 			});
 		}
 		console.debug(`schema.on('init'): model=${inspect(model)}`);

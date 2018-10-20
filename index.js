@@ -13,13 +13,14 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, breakLength: 0, compact: false });
 // const util = require('util');
 const _ = require('lodash');
 // const fs = require('fs');
 // const nodePath = require('path');
 const mongoose = require('./mongoose.js');
+const Q = require('q');
 
 const fsIterate = require('./fs/iterate.js');
 const hashFile = require('./fs/hash.js');
@@ -46,7 +47,7 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 				file => file.ensureCurrentHash(),
 				conditionalPipe(
 					file => ['wav', 'mp3', 'au', 'flac'].includes(file.extension.toLowerCase()),
-					file => Audio.find({ fileId: file._id })
+					file => Audio.findOrCreate({ fileId: file._id })
 					.then(audio => {
 						if (_.isArray(audio)) audio = audio[0];
 						if (!audio) audio = new Audio({ fileId : file._id});
@@ -61,6 +62,10 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 		fsEntry => fsEntry.bulkSave()
 	]
 ))
+
+//> db.fs.aggregate([{$lookup:{from:"audios", localField:"_id", foreignField:"fileId", as: "audio"}},{$unwind:"$audio"}]).pretty()
+
+
 // .then(() => promisePipe(
 // 	File.find({ path: { $regex: /.*\.(wav|au|mp3|flac)$/i } }).cursor(),
 // 		file => Audio.find({ fileId: file._id }).then(audio => {
@@ -75,9 +80,9 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 // ))
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 .then(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
-.then(() =>
-	mongoose.connection.close()
+.then(() => Q.delay(1000))
+.then(() => mongoose.connection.whenIdle())
+.then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
-	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); })
-)
+	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 .done();

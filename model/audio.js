@@ -1,5 +1,5 @@
 "use strict";
-var console = require('../stdio.js').Get('modules/audio', { minLevel: 'debug' });	// debug verbose
+var console = require('../stdio.js').Get('modules/audio', { minLevel: 'verbose' });	// debug verbose
 const inspect =	require('../utility.js').makeInspect({ depth: 1, compact: true });
 const inspectPretty = require('../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 // const baseFs = require('../fs.js');
@@ -72,8 +72,10 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
         audio.metadata = metadata;
         return audio;
     }).catch(err => {
-        console.warn(`mm.parseFile error: ${err.stack||err}`);//\nmodel._stats:${inspect(model._stats)}`)
+        err.message = `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`;
+        console.warn(err.message);//\nmodel._stats:${inspect(model._stats)}`)
         model._stats.errors.push(err);
+        return audio;
     });
 });
 
