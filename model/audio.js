@@ -10,36 +10,74 @@ const mongoose = require('../mongoose.js');
 const mm = require('music-metadata');
 // const app = require('../app.js');
 
-var audioSchema = new mongoose.Schema({
+// var metadataSchema = new mongoose.Schema({
+//         format: {
+//             tagTypes: [mongoose.Schema.Types.Mixed],
+//             dataFormat: String,
+//             bitsPerSample: Number,
+//             sampleRate: Number,
+//             numberOfChannels: Number,
+//             bitrate: Number,
+//             lossless: Boolean,
+//             numberOfSamples: Number,
+//             Duration: Number
+//         },
+//         native: mongoose.Schema.Types.Mixed,
+//         common: {
+//             track: mongoose.Schema.Types.Mixed,
+//             disk: mongoose.Schema.Types.Mixed
+//         }
+//     });
 
+var audioSchema = new mongoose.Schema({
     fileId: { type: mongoose.SchemaTypes.ObjectId, required: true, unique: true },
-    length: { type: Number, required: true, default: 0 },
-    metadata: {}
+    metadata:// mongoose.SchemaTypes.Mix{}//metadataSchema
+    {
+        format: {},
+        //     tagTypes: [],//[mongoose.SchemaTypes.String],
+        //     dataformat: String,
+        //     bitsPerSample: Number,
+        //     sampleRate: Number,
+        //     numberOfChannels: Number,
+        //     bitrate: Number,
+        //     lossless: Boolean,
+        //     numberOfSamples: Number,
+        //     duration: Number
+        // },
+        native: {},//mongoose.Schema.Types.Mixed,
+        common: {}
+        // {
+        //     track: mongoose.Schema.Types.Mixed,
+        //     disk: mongoose.Schema.Types.Mixed
+        // }
+    }
 }, { /*_id: false*/ });
 
-audioSchema.virtual('file').set(function(file) {
-    this._file = file;
-    this.fileId = file._id;
-})
+// audioSchema.virtual('file').set(function(file) {
+//     this._file = file;
+//     this.fileId = file._id;
+// })
 
 audioSchema.plugin(require('./plugin/timestamp.js'));
 audioSchema.plugin(require('./plugin/standard.js'));
 audioSchema.plugin(require('./plugin/bulk-save.js'));
 audioSchema.plugin(require('./plugin/stat.js'), { data: { save: {}, validate: {} } });
 
-audioSchema.method('loadMetadata', function loadMetadata() {
+audioSchema.method('loadMetadata', function loadMetadata(file) {
     var audio = this;
-    var artefact = this.$parent;
-    var model = this.$parent.constructor;
-    console.verbose(`audio=${inspectPretty(audio)} artefact=${inspectPretty(artefact)}`);
-    return mm.parseFile(artefact.fs.path).then(metadata => {
-        console.verbose(`metadata=${inspectPretty(metadata)}`);
+    var model = this.constructor;
+    console.debug(`audio=${inspectPretty(audio)} file=${inspectPretty(file)}`);
+    return mm.parseFile(file.path).then(metadata => {
+        console.debug(`metadata=${inspectPretty(metadata)}`);
         audio.metadata = metadata;
-        return artefact;
+        return audio;
     }).catch(err => {
-        console.warn(`mm.parseFile error: ${}`)
+        console.warn(`mm.parseFile error: ${err.stack||err}`);//\nmodel._stats:${inspect(model._stats)}`)
         model._stats.errors.push(err);
     });
 });
 
+// audioSchema.method('toString', function toString(options) {
+//     return inspect(this, options || { depth: 0, compact: true });
+// })
 module.exports = mongoose.model('Audio', audioSchema);

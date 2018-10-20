@@ -28,7 +28,7 @@ function getNewStatBasicCountsObject(extra) {
 		errors: []
 	}, 1);
 	_.assign(s, _.mapValues(_.cloneDeep(extra), (value, key) => !_.isPlainObject(value) ? value : addStatsInspect(value, 2)));
-	return s;
+	return addStatsInspect(s, 0);
 }
 
 module.exports = function statSchemaPlugin(schema, options) {
@@ -44,7 +44,7 @@ module.exports = function statSchemaPlugin(schema, options) {
 	schema.on('init', model => {
 		if (schema._stats !== undefined) {
 			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
-				_.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value))
+				_.assign({ errors: [] }, _.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value)))
 			});
 		}
 		console.debug(`schema.on('init'): model=${inspect(model)}`);

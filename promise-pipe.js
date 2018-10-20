@@ -10,7 +10,13 @@ const pEvent = require('p-event');
 
 var self = {
 
-	chainPromiseFuncs(chain) {
+	chainPromiseFuncs(...args) {
+		var chain;
+		if (_.isArray(args[0]) && args.length === 1) {
+			chain = args[0];
+		} else {
+			chain = args;
+		}
 		return data => _.reduce(chain, (chain, current) => chain.then(current), Q(data));
 	},
 
@@ -57,7 +63,7 @@ var self = {
 		);
 	},
 
-	conditional(condition, pipe1, pipe2 = null) {
+	conditionalPipe(condition, pipe1, pipe2 = null) {
 		return (data => condition(data) ? pipe1(data) : (pipe2 ? pipe2(data) : data));
 	}
 

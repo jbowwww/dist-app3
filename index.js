@@ -13,7 +13,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, breakLength: 0, compact: false });
 // const util = require('util');
 const _ = require('lodash');
@@ -28,7 +28,7 @@ const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
-const { promisePipe, chainPromiseFuncs }  = require('./promise-pipe.js');
+const { promisePipe, chainPromiseFuncs, conditionalPipe }  = require('./promise-pipe.js');
 const pEvent = require('p-event');
 const mm = require('music-metadata');
 
@@ -40,27 +40,39 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 .then(() => promisePipe(
 	fsIterate({ path: '/media/jk/Stor/mystuff/Moozik/samples/', maxDepth: 4 /*'/home/jk', maxDepth: 5*/ }), [
 		fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
-		fsEntry => fsEntry.fileType === 'file' ? fsEntry.ensureCurrentHash() : fsEntry,
-		fsEntry => fsEntry.bulkSave(),
-		fsEntry => fsEntry.children.push()
+		conditionalPipe(
+			fsEntry => fsEntry.fileType === 'file',
+			chainPromiseFuncs(
+				file => file.ensureCurrentHash(),
+				conditionalPipe(
+					file => ['wav', 'mp3', 'au', 'flac'].includes(file.extension.toLowerCase()),
+					file => Audio.find({ fileId: file._id })
+					.then(audio => {
+						if (_.isArray(audio)) audio = audio[0];
+						if (!audio) audio = new Audio({ fileId : file._id});
+						if (audio.isNew || (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date()))) {
+							console.verbose(`Audio.loadMetadata on '${file.path}' (${file.id})`);
+							return audio.loadMetadata(file);//.then(() => file.bulkSave());;
+						}
+						return audio;
+					})
+					.then(audio => audio.bulkSave())
+					.then(() => file) ) ) ),
+		fsEntry => fsEntry.bulkSave()
 	]
 ))
-.then(() => promisePipe(
-	File.find({ path: { $regex: /.*\.(wav|au|mp3|flac)$/i } }).cursor(), [
-		file => Audio.find({ fileId: file._id }).then(audio => {
-			if (!audio) audio = new Audio({ fileId : file._id});
-			if (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date())) {
-				console.verbose(`Audio.loadMetadata on '${file.path}' (${file.id})`);
-				audio.loadMetadata
-			}
-		} ) mm.parseFile(file.path).then(
-			metadata => /*Audio.create*/ Audio.findOrCreate({ fileId: file._id }, { fileId: file._id, length: 1, metadata }).then(
-				audio => { file.children.push(/*{ child:*/ audio/*._id, ref: 'Audio' }*/); return file; })),
-		file => { console.log(`file: ${inspect(file)}`); return file.bulkSave(); },
-		// metadata => { console.log(`metadata: ${inspect(metadata)}`); }
-		// audio => { console.log(`Audio file found: ${typeof audio} ${audio.constructor.name} ${inspect(audio)}`); return audio; } 
-	]
-))
+// .then(() => promisePipe(
+// 	File.find({ path: { $regex: /.*\.(wav|au|mp3|flac)$/i } }).cursor(),
+// 		file => Audio.find({ fileId: file._id }).then(audio => {
+// 			console.log(`audio: ${inspect(audio)}`);
+// 			if (_.isArray(audio)) audio = audio[0];
+// 			if (!audio) audio = new Audio({ fileId : file._id});
+// 			if (audio.isNew || (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date()))) {
+// 				console.verbose(`Audio.loadMetadata on '${file.path}' (${file.id})`);
+// 				audio.loadMetadata(file);
+// 			}
+// 		}).then(audio => audio.bulkSave())
+// ))
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 .then(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
 .then(() =>
