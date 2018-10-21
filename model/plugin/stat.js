@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/stat', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/stat', { minLevel: 'log' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
@@ -36,7 +36,9 @@ function getNewStatBasicCountsObject(extra) {
 		checked: 0,
 		errors: []
 	});
-	_.assign(s, _.cloneDeep(extra));	//_.mapValues(_.cloneDeep(extra), (value, key) => !_.isPlainObject(value) ? value : addStatsInspect(value, 2)));
+	_.assign(s, //_.cloneDeep(extra));
+		_.mapValues(_.cloneDeep(extra), (value, key) => !_.isPlainObject(value) ? value : 
+			_.set(value, util.inspect.custom, function(depth, options) { return util.inspect(_.mapValues(this, (v, k) => v), { compact: true }); })));//addStatsInspect(value, 2)));
 	return addStatsInspect(s, 0);
 }
 

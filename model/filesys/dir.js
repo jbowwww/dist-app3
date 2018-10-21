@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/dir', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/dir', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const mongoose = require('mongoose');
 const FsEntry = require('./filesys-entry.js');

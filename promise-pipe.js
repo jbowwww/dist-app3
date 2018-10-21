@@ -15,11 +15,11 @@ var self = {
 	 *	promiseFunctions: An array of promise-returning functions that take one parameter (data), which will be chained together and called as data arrives
 	 *	options.enableStreamErrors: (default: false) whether exceptions/promise rejections in the promiseFunctions pipeline get emitted on the emitter as an 'error' event
 	 */
-	promisePipe(sourceStream, promiseFunctions, options = {}) {
+	promisePipe(sourceStream, ...promiseFunctions/*, options = {}*/) {
 		if (!sourceStream || !sourceStream.on) {
 			throw new TypeError(`sourceStream must be a node stream emitter`);
 		}
-		options = _.defaults(options, {	});
+		// options = _.defaults(options, {	});
 
 		/* The way this is set up, a promisePipe is potentially an array with multiple promise-returning func's
 		 * If it is, the func's are chained together in a way that is sort of similar to a thru-stream (i think)

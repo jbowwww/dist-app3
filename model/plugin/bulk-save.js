@@ -16,6 +16,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				items: {
 					insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
 					get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
+					// toString() { return util.inspect(this, { compact: true }); }
 				}
 			}
 		}

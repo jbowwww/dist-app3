@@ -33,79 +33,32 @@ const { promisePipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs
 const pEvent = require('p-event');
 const mm = require('music-metadata');
 
-// console.verbose(`Audio: ${inspect(Audio)}`);
-
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true }).then(() => 
 
-	// chainPromiseFuncs(
+	promisePipe(	fsIterate({ path: '/media/jk/Stor/mystuff/Moozik/samples/', maxDepth: 4 }),
+					fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
+					fsEntry => fsEntry.bulkSave()							)
 
-		streamPromise(
-			fsIterate({
-				path: '/media/jk/Stor/mystuff/Moozik/samples/',
-				maxDepth: 4 /*'/home/jk', maxDepth: 5*/
-			}).pipe(writeablePromiseStream(
-				fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
-				fsEntry => fsEntry.bulkSave()
-			))
-		),
-)/*.delay(1200)*/.then(() => 
-	streamPromise(
-		File.find().cursor().pipe(writeablePromiseStream(
-		conditionalPipe(
-			fsEntry => fsEntry.fileType === 'file',
-			chainPromiseFuncs(
-				file => file.ensureCurrentHash(),
-				file => file.bulkSave()
-			)
-		)
-	)))
 )/*.delay(1200)*/.then(() => 
 
-// console.verbose(`test`);
-	streamPromise(
-		File.find({
-			path: { $regex: /^.*\.(wav|mp3|au|flac)$/i }
-		}).cursor().pipe(writeablePromiseStream(
-			// chainPromiseFuncs(
-			// nestPromiseFuncs(
-			file => Audio.findOrCreate({ fileId: file._id }).then(
-				chainPromiseFuncs(
-					conditionalPipe(
-						audio => audio.isNew || (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date())),
-						chainPromiseFuncs(
-							audio => audio.loadMetadata(file),
-							audio => audio.bulkSave()
-						)
-					),
-					audio => {
-						_.assign(file, { audio });
-						console.verbose(`file: ${inspect(file)}`);
-						return file;
-					}
-				)
-			),
-			file => file.bulkSave(),
-			file => { console.verbose(`file: ${inspect(file)}`); return file; }
-		))
-	)
-)
+	promisePipe(	File.find().cursor(),
+					file => file.ensureCurrentHash(),
+					file => file.bulkSave()									)
 
-//> db.fs.aggregate([{$lookup:{from:"audios", localField:"_id", foreignField:"fileId", as: "audio"}},{$unwind:"$audio"}]).pretty()
+)/*.delay(1200)*/.then(() => 
 
+	promisePipe(	File.find({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }).cursor(),
+					file => Audio.findOrCreate({ fileId: file._id }).then(
+						chainPromiseFuncs(		//> db.fs.aggregate([{$lookup:{from:"audios", localField:"_id", foreignField:"fileId", as: "audio"}},{$unwind:"$audio"}]).pretty()
+							conditionalPipe(
+								audio => audio.isNew || (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date())),
+								chainPromiseFuncs(
+									audio => audio.loadMetadata(file),
+									audio => audio.bulkSave() ) ),
+							audio => _.assign(file, { audio }) ) ),
+					file => file.bulkSave()									)
 
-// .then(() => promisePipe(
-// 	File.find({ path: { $regex: /.*\.(wav|au|mp3|flac)$/i } }).cursor(),
-// 		file => Audio.find({ fileId: file._id }).then(audio => {
-// 			console.log(`audio: ${inspect(audio)}`);
-// 			if (_.isArray(audio)) audio = audio[0];
-// 			if (!audio) audio = new Audio({ fileId : file._id});
-// 			if (audio.isNew || (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date()))) {
-// 				console.verbose(`Audio.loadMetadata on '${file.path}' (${file.id})`);
-// 				audio.loadMetadata(file);
-// 			}
-// 		}).then(audio => audio.bulkSave())
-// ))
-.catch(err => { console.error(`error: ${err.stack||err}`); })
+).catch(err => { console.error(`error: ${err.stack||err}`); })
 .then(() => Q.delay(1000))
 .then(() => mongoose.connection.whenIdle())
 .then(() => mongoose.connection.close()
