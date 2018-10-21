@@ -1,23 +1,18 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/file', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/file', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
-const mongoose = require('mongoose');
+const mongoose = require('../../mongoose.js');
 const FsEntry = require('./filesys-entry.js');
 
 let file = new mongoose.Schema({
 	hash: { type: String, required: false }
 });
 
-// file.plugin(require('./plugin/timestamp.js'));
-
-// file.plugin(timestampPlugin);
-// file.plugin(require('./plugin/standard.js'));
-// file.plugin(require('./plugin/bulk-save.js'));
 file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
@@ -29,8 +24,6 @@ file.virtual('extension').get(function extension() {
 
 file.query.hasHash = function() { return this.exists('hash'); };
 
-// var stats = {};	// very temporary hack/fix
-
 /* Ensures the file doc ('this') has a hash value, and that the doc's updatedAt is more recent than the file's mtime ('stats.mtime')
  * returns: the file/this, with hash calculated
  */
@@ -40,24 +33,19 @@ file.methods.ensureCurrentHash = function(cb) {
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
 	model._stats.ensureCurrentHash.calls++;
 	console.debug(`${debugPrefix}.ensureCurrentHash():  file='${file.path}'`);// this.constructor=${this.constructor} this.constructor.prototype=${this.constructor.prototype}`)
-	// if (file.fileType !== 'file') {		// ensure is an actual file and nota dir or 'unknown' or otherwise
-	// 	console.warn(`${debugPrefix}.ensureCurrentHash() called for ${model.name} data with fileType='${file.fileType}', should only be called for files!`);
-	// }
 	return Q.Promise((resolve, reject, notify) => {
 		var oldHash = file.hash;
 		console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' modifiedPaths=${file.modifiedPaths().join(' ')} tsu=${file._ts.updatedAt} mtime=${file.stats.mtime} tsu-mtime=${file._ts.updatedAt - file.stats.mtime}`);
 		if (!oldHash || !file._ts.updatedAt || file.isModified('stats.mtime') || (file._ts.updatedAt < (file.stats.mtime))) {
 			if (!oldHash) { console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' undefined file.hash, hashing...`); }
 			else { console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' outdated file.hash=..${file.hash.substr(-6)}, hashing...`); }
-			// return model._hashQueue.push(file).then(file => { if (cb) cb(null, file); return file; });
 			/*return*/ hashFile(file.path).then((hash) => {
 				model._stats.ensureCurrentHash.success++;
 				if (!oldHash) { model._stats.ensureCurrentHash.created++; }
 				else { model._stats.ensureCurrentHash.updated++; }
 				file.hash = hash;
 				console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
-				resolve (file);
-				// return file;
+				resolve (file);				// return file;
 			})
 			.catch(err => ensureCurrentHashHandleError(err, 'hash error', reject))
 			.done();
@@ -65,8 +53,7 @@ file.methods.ensureCurrentHash = function(cb) {
 			model._stats.ensureCurrentHash.success++;
 			model._stats.ensureCurrentHash.checked++;
 			console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' current file.hash=..${file.hash.substr(-6)}, no action required`);
-			resolve(file);
-			// return file;
+			resolve(file);			// return file;
 		}
 	});
 
@@ -85,8 +72,7 @@ file.methods.ensureCurrentHash = function(cb) {
  * model.aggregate, and set its prototype to a new object that contains functions of the same names as below, and inherits from the original
  * prototype of the Aggregate object. The funcs can then take parameters too (e.g. sizeMoreThan(1024) or duplicates({minimumGroupSize: 3})) and gives
  * a nice intuitive syntax with method chaining, like :
- * models.fs.file.aggregate.match({path: / *regex to match e.g. video extensions like mpg * /}).groupBySizeAndHash().minimumDuplicateCount(2)
-*/
+ * models.fs.file.aggregate.match({path: / *regex to match e.g. video extensions like mpg * /}).groupBySizeAndHash().minimumDuplicateCount(2) */
 file.aggregates = {
 	match(query) {
 		return [ { $match: query } ];
@@ -117,14 +103,6 @@ file.aggregates = {
 	}
 };
 
-// file.plugin(require('./plugin/timestamp.js'));
-// file.plugin(require('./plugin/standard.js'));
-// file.plugin(require('./plugin/bulk-save.js'));
-// file.plugin(require('./plugin/stat.js'));
-
-// file.on('init', model => {
-// 	Object.defineProperty(model, 'options', { value: {
-
-// 	}})
-// });
 module.exports = FsEntry.discriminator('file', file);
+
+console.verbose(`File: ${inspect(module.exports)}, File.prototype: ${inspect(module.exports.prototype)}`);

@@ -4,14 +4,9 @@ const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: fal
 const mongoose = require('mongoose');
 const FsEntry = require('./filesys-entry.js');
 
-let dirSchema = new mongoose.Schema({
+let dirSchema = new mongoose.Schema({ });
 
-});
-
-dirSchema.plugin(require('../plugin/timestamp.js'));
-dirSchema.plugin(require('../plugin/standard.js'));
-dirSchema.plugin(require('../plugin/bulk-save.js'));
-// dirSchema.plugin(require('./plugin/stat.js'));
+// dirSchema.plugin(require('./plugin/stat.js'), { data: {} });
 
 module.exports = FsEntry.discriminator('dir', dirSchema);
 

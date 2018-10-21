@@ -10,47 +10,52 @@ const mongoose = require('../mongoose.js');
 const mm = require('music-metadata');
 // const app = require('../app.js');
 
-// var metadataSchema = new mongoose.Schema({
-//         format: {
-//             tagTypes: [mongoose.Schema.Types.Mixed],
-//             dataFormat: String,
-//             bitsPerSample: Number,
-//             sampleRate: Number,
-//             numberOfChannels: Number,
-//             bitrate: Number,
-//             lossless: Boolean,
-//             numberOfSamples: Number,
-//             Duration: Number
-//         },
-//         native: mongoose.Schema.Types.Mixed,
-//         common: {
-//             track: mongoose.Schema.Types.Mixed,
-//             disk: mongoose.Schema.Types.Mixed
-//         }
-//     });
+var formatSchema = new mongoose.Schema({
+    tagTypes: [String],
+    dataformat: String,
+    bitsPerSample: Number,
+    sampleRate: Number,
+    numberOfChannels: Number,
+    bitrate: Number,
+    lossless: Boolean,
+    numberOfSamples: Number,
+    duration: Number
+});
+
+var commonSchema = new mongoose.Schema({
+    track: {
+        no: Number,
+        of: Number
+    },
+    disk: {
+        no: Number,
+        of: Number
+    },
+    year: Number,
+    date: String,
+    engineer: [String],
+    encodedBy: String,
+    encodersettings: String,
+    title: String,
+    artist: String,
+    artists: [String],
+    genre: [String],
+    bpm: String
+});
+
+var nativeSchema = new mongoose.Schema({
+
+});
+
+var metadataSchema = new mongoose.Schema({
+    format: formatSchema,
+    common: commonSchema,
+    native: nativeSchema
+});
 
 var audioSchema = new mongoose.Schema({
     fileId: { type: mongoose.SchemaTypes.ObjectId, required: true, unique: true },
-    metadata:// mongoose.SchemaTypes.Mix{}//metadataSchema
-    {
-        format: {},
-        //     tagTypes: [],//[mongoose.SchemaTypes.String],
-        //     dataformat: String,
-        //     bitsPerSample: Number,
-        //     sampleRate: Number,
-        //     numberOfChannels: Number,
-        //     bitrate: Number,
-        //     lossless: Boolean,
-        //     numberOfSamples: Number,
-        //     duration: Number
-        // },
-        native: {},//mongoose.Schema.Types.Mixed,
-        common: {}
-        // {
-        //     track: mongoose.Schema.Types.Mixed,
-        //     disk: mongoose.Schema.Types.Mixed
-        // }
-    }
+    metadata: metadataSchema
 }, { /*_id: false*/ });
 
 // audioSchema.virtual('file').set(function(file) {
@@ -69,12 +74,13 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
     console.debug(`audio=${inspectPretty(audio)} file=${inspectPretty(file)}`);
     return mm.parseFile(file.path).then(metadata => {
         console.debug(`metadata=${inspectPretty(metadata)}`);
-        audio.metadata = metadata;
+        audio.updateDocument({ metadata });//metadata = metadata;
         return audio;
     }).catch(err => {
-        err.message = `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`;
-        console.warn(err.message);//\nmodel._stats:${inspect(model._stats)}`)
-        model._stats.errors.push(err);
+        var e = new Error( `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`);
+        e.stack = err.stack;
+        console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
+        model._stats.errors.push(e);
         return audio;
     });
 });

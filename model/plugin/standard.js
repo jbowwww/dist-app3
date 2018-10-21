@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -64,11 +64,11 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			var fullPath = pathPrefix + propName;
 			var docVal = this.get(fullPath);
 			var schemaType = this.schema.path(fullPath);
-			if (schemaType && schemaType.instance === 'Embedded') {
-				console.debug(`updateDocument: ${fullPath}: Embedded`);
+			if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray' ].includes(schemaType.instance))) {
+				console.debug(`updateDocument: ${fullPath}: ${schemaType.instance}`);
 				this.updateDocument(updVal, fullPath + '.');
 			} else if (!_.isEqual(docVal, updVal)) {
-				console.debug(`updateDocument: ${fullPath}: Updating ${docVal} to ${updVal}`);
+				console.debug(`updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
 				this.set(fullPath, updVal);
 			} else {
 				console.debug(`updateDocument:${fullPath}: No update to ${docVal}`);
