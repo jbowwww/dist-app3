@@ -43,4 +43,10 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		this._ts.deletedAt = timestamp;
 		return Q(this);
 	});
+
+	/* Returns true if the timestamps indicate this object is still current relative to given timestamp */
+	schema.method('hasUpdatedSince', function(timestamp) {
+		return (this._ts.updatedAt && (this._ts.updatedAt >= timestamp))
+		 || (this._ts.checkedAt && (this._ts.checkedAt >= timestamp));
+	});
 };

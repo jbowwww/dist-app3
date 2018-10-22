@@ -52,6 +52,10 @@ var fsEntry = new mongoose.Schema({
 	discriminatorKey: 'fileType'
 });
 
+fsEntry.method('hasFileChanged', function() {
+	return this.hasUpdatedSince(this.stats.mtime);	// timestampPlugin method
+});
+
 fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);

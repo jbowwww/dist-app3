@@ -17,37 +17,37 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.plugin(require('./stat.js'), { data: { save: {}, validate: {} } });
 	
 	schema.pre('validate', function(next) {
-		console.debug(`stat: pre('validate')`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
+		console.debug(`stat: pre('validate'): actionType=${actionType} id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		this.constructor._stats.validate[actionType]++;
 		this.constructor._stats.validate.calls++;
 		return next();
 	});
 	schema.post('validate', function(doc, next) {
-		console.debug(`stat: post('validate')`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
+		console.debug(`stat: post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		this.constructor._stats.validate.success++;
 		return next();
 	});
 	schema.post('validate', function(err, doc, next) {
-		console.debug(`stat: post('validate') error: ${err.stack||err.message||err}`);
+		console.debug(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.validate.errors.push(err);
 		return next(err);
 	});
 
 	schema.pre('save', function(next) {
-		console.debug(`stat: pre('save')`);
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
+		console.debug(`stat: pre('save'): actionType=${actionType} id=${this._id.toString()}`);
 		this.constructor._stats.save[actionType]++;
 		this.constructor._stats.save.calls++;
 		return next();
 	});
 	schema.post('save', function(doc, next) {
-		console.debug(`stat: post('save')`);
+		console.debug(`stat: post('save'): id=${this._id.toString()}`);
 		this.constructor._stats.save.success++;
 		return next();
 	});
 	schema.post('save', function(err, doc, next) {
-		console.debug(`stat: post('save') error: ${err.stack||err.message||err}`);
+		console.debug(`stat: post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.save.errors.push(err);
 		return next(err);
 	});

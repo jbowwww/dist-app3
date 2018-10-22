@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -23,6 +23,25 @@ file.virtual('extension').get(function extension() {
 });
 
 file.query.hasHash = function() { return this.exists('hash'); };
+
+file.methods.doHash = function() {
+	var file = this;
+	var model = this.constructor;
+	var debugPrefix = `[${typeof model} ${model.modelName}]`;
+	model._stats.ensureCurrentHash.calls++;
+	return hashFile(file.path).then((hash) => {
+		model._stats.ensureCurrentHash.success++;
+		if (!file.hash) { model._stats.ensureCurrentHash.created++; }
+		else { model._stats.ensureCurrentHash.updated++; }
+		file.hash = hash;
+		console.debug(`${debugPrefix}.doHash(): file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
+		return file;
+	}).catch(err => {
+		console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
+		model._stats.ensureCurrentHash.errors.push(err);
+		return file;	// should i really actually be catching an err then returning file like nothing happened??
+	});	
+};
 
 /* Ensures the file doc ('this') has a hash value, and that the doc's updatedAt is more recent than the file's mtime ('stats.mtime')
  * returns: the file/this, with hash calculated

@@ -58,12 +58,12 @@ var self = {
 		return data => _.reduce(chain, (chain, current) => chain.then(current), Q(data));
 	},
 
-	nestPromiseFuncs(promiseFunc, ...nestedPromiseFuncs) {
-		return (promiseFunc(data).then(data2 => (self.chainPromiseFuncs(...nestedPromiseFuncs))(data2)));
-	},
+	// nestPromiseFuncs(promiseFunc, ...nestedPromiseFuncs) {
+	// 	return (promiseFunc(data).then(data2 => (self.chainPromiseFuncs(...nestedPromiseFuncs))(data2)));
+	// },
 
-	conditionalPipe(condition, pipe1, pipe2 = null) {
-		return (data => condition(data) ? pipe1(data) : (pipe2 ? pipe2(data) : data));
+	conditionalPipe(condition, ...pipe1) {//, pipe2 = null) {
+		return (data => condition(data) ? (self.chainPromiseFuncs(pipe1))(data) : data);// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
 	},
 
 	streamPromise(stream, options = {}) {

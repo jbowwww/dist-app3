@@ -33,11 +33,15 @@ const { promisePipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs
 const pEvent = require('p-event');
 const mm = require('music-metadata');
 
+// 181022: Tried hooking into mongoose's middlewares for this logic but it's just awkward and unreliable and unclear
+// I *think* I'm better off keeping the three distinct phases to data creation somewhat separate in 3 different promises, below
+// it sort of decouples the process a bit and hopefully makes it more tolerant incase some data is incomplete or process previously got interruipted
+
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true }).then(() => 
 
 	promisePipe(	fsIterate({ path: '/media/jk/Stor/mystuff/Moozik/samples/', maxDepth: 4 }),
-					fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry),
-					fsEntry => fsEntry.bulkSave()							)
+					fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) ,
+					fsEntry => fsEntry.save())//bulkSave()							)
 
 )/*.delay(1200)*/.then(() => 
 
@@ -47,20 +51,26 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 )/*.delay(1200)*/.then(() => 
 
+	// 181022: OK so I think I've got it basically saving the assocaited types (file/audio) together in one object,
+	// but retrieved from two differemt DN collections. The only issue is that this code  is handling both the intial creation
+	// of each artefact and the case where it already has the audio artefact loaded in the db, so it doesnt automatically go
+	// populating from the datbase unless the regex is first matched. To do this i think you will need either a preset list of
+	// models (e.g. mongoose.models) to search for the file._id (hey this option might be better and/or easier actually) ..
+	// .. or you could store some sort of array of model names stored in each file document that have data for that artefact.. (sounds messy) 
+	// Right! did that all make sense ^ ? 
+	
 	promisePipe(	File.find({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }).cursor(),
 					file => Audio.findOrCreate({ fileId: file._id }).then(
-						chainPromiseFuncs(		//> db.fs.aggregate([{$lookup:{from:"audios", localField:"_id", foreignField:"fileId", as: "audio"}},{$unwind:"$audio"}]).pretty()
-							conditionalPipe(
-								audio => audio.isNew || (audio._ts.checkedAt < file.stats.mtime || audio._ts.checkedAt < (new Date())),
-								chainPromiseFuncs(
-									audio => audio.loadMetadata(file),
-									audio => audio.bulkSave() ) ),
-							audio => _.assign(file, { audio }) ) ),
-					file => file.bulkSave()									)
+						audio => { Object.defineProperty(file, 'audio', { value: audio }); return file; })	,//_.assign(file, { audio })),
+					conditionalPipe(
+						file => file.audio.isNew || (file.audio._ts.checkedAt < file.stats.mtime || file.audio._ts.checkedAt < (new Date())),
+						file => { console.log(`ol ye file: keys: ${_.keys(file)}`); return file.audio.loadMetadata(file).then(() => file) },
+						file => file.audio.save() ) ) 
+// 					file => file.bulkSave()									)
 
 ).catch(err => { console.error(`error: ${err.stack||err}`); })
-.then(() => Q.delay(1000))
-.then(() => mongoose.connection.whenIdle())
+.then(() => Q.delay(18000))
+// .then(() => mongoose.connection.whenIdle())
 .then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))

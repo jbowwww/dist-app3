@@ -1,0 +1,19 @@
+
+181021
+Some notes on mongoose middleware
+
+pre, on, and post 'init' are fired when documents are initialised from the DB (mongoose.DOcument.prototype.init, i think)
+	pre receives, as an argument, the POJO data being used to initialise the document. its typeof is 'object'
+	on and post 'init' take the constructed mongoose document as an argument.
+	Both the POJO and the document have an id since it was initialised from the DB
+	The document instance will have isNew == false and isModified == false
+	Appears that it is triggered on find() calls also
+	
+pre, on and post 'validate' are fired when document.validate() is called
+	document.save() has a pre middleware that calls validate().
+		If validation throws an error save() is aborted (I think)
+	I have done the same in my implementation of bulkSave() for some consistency
+		I am trying to stick with using this bulkSave() for efficiency
+		If a document is a newly created instance (ie not from the database) it will have
+			doc.isNew == true
+			no _id until the document is saved in the datbase (i think - confirm this)
