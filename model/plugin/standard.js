@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -7,6 +7,7 @@ const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
 mongoose.Promise = Q.Promise;
+const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
 
 /* Standard/common schema methods, statics
  */
@@ -112,7 +113,15 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	/* Find a _meta document from the given model(table)
 	 * */
-	schema.method('getArtefact', function getArtefact() {
+	schema.static('getArtefacts', function getArtefacts(query, options = {}) {
+		var model = this;
+		console.log(`toArtefact(): model=${inspect(model, { compact: false })}, options=${inspect(options, { compact: false })}`);
+		return model.find(query).cursor({ transform: doc => doc.getArtefact(options) });
+	});
+
+	/* Find a _meta document from the given model(table)
+	 * */
+	schema.method('getArtefact', function getArtefact(options = {}) {
 		
 		var doc = this;
 		var docModel = this.constructor;
@@ -129,14 +138,14 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 		var a = Object.create({
 			
-			bulkSave(options) {
-				options = _.assign({
+			bulkSave(opts) {
+				opts = _.assign({
 					maxBatchSize: 10,
 					batchTimeout: 750
-				}, options);
-				console.verbose(`Artefact.bulkSave: ${inspect(this, { compact: false })}`);
+				}, opts);
+				console.verbose(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
 				return Q.all(
-					_.map(this, (data, dataName) => data.bulkSave(options.meta && options.meta[dataName] ? options.meta[dataName] : options))
+					_.map(this, (data, dataName) => data.bulkSave(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts))
 				)
 				.then(() => this);
 			},
@@ -165,21 +174,25 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			[docModelName]: getPropertyDescriptor(doc)
 		});
 		
-		var allModels = mongoose.modelNames();
+		var allModels = options.meta ? _.keys(options.meta) : mongoose.modelNames();
 		return Q.all(_.map(allModels, modelName => {
 			var model = mongoose.model(modelName);
-			return model.findOne({ _metaParent: { $eq: doc._id } }).exec().then(meta => {
-			console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}`);
-				if (meta) {
-					Object.defineProperty(a, modelName, getPropertyDescriptor(meta));
-				}
-			});
-		})).then(() => {;
+			return model.findOrCreate({ _metaParent: doc._id })
+			// .exec()
+			.then(meta => {
+					console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}`);
+					meta && Object.defineProperty(a, modelName, getPropertyDescriptor(meta));
+				}).then(() => (options.meta && options.meta[modelName] ?
+				typeof options.meta[modelName] === 'function' ? options.meta[modelName](a)
+			 :  _.isArray(options.meta[modelName]) ? chainPromiseFuncs(options.meta[modelName])(a)
+			 : 	Q(a) : Q(a)));
+		}))
+		.then(() => {
 
-		console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`);
-		return Q(a);
+			console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`);
+			return Q(a);
 
-	});
+		});
 	
 	});
 

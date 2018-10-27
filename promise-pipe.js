@@ -63,7 +63,7 @@ var self = {
 		// } else if (!(data instanceof mongoose.Document)) {
 			// throw new TypeError(`data should be a mongoose.Document`);
 		// }
-		return self.chainPromiseFuncs(promiseFunctions)(data).then(() => artefact);
+		return (self.chainPromiseFuncs(promiseFunctions))(data).then(() => artefact);
 		 // (a => 
 			// );
 	},
@@ -107,8 +107,14 @@ var self = {
 
 	chainPromiseFuncs(...args) {
 		var chain;
-		if (_.isArray(args[0]) && args.length === 1) {
-			chain = args[0];
+		if (args.length === 1) {
+			if (typeof args[0] === 'function') {
+				return data => args[0](data);
+			} else if (_.isArray(args[0])) {
+				chain = args[0];
+			} else {
+				throw new TypeError(`chainPromiseFuncs: args: ${typeof args} ${inpect(args, { compact: false })}`);
+			}
 		} else {
 			chain = args;
 		}
