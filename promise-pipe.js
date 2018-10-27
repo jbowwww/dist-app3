@@ -1,7 +1,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('bin/fs/source-pipe', { minLevel: 'verbose' });	// verbose debug log
+const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'verbose' });	// verbose debug log
 const stream = require('stream');
 const _ = require('lodash');
 const inspect = require('util').inspect;
@@ -15,11 +15,33 @@ var self = {
 	 *	promiseFunctions: An array of promise-returning functions that take one parameter (data), which will be chained together and called as data arrives
 	 *	options.enableStreamErrors: (default: false) whether exceptions/promise rejections in the promiseFunctions pipeline get emitted on the emitter as an 'error' event
 	 */
-	promisePipe(sourceStream, ...promiseFunctions/*, options = {}*/) {
+	promisePipe(...args) { //sourceStream, ...promiseFunctions/*, options = {}*/) {
+		var sourceStream, options, promiseFunctions = [];
+
+		_.forEach(args, (arg, i) => {
+			if (typeof arg === 'object') {
+				if (promiseFunctions.length > 0) {
+					throw new TypeError('promisePipe: arguments must end with promise functions');
+				}
+				if (arg.emit) {
+					sourceStream = arg;
+				} else {
+					options = arg;
+				}
+			} else if (typeof arg === 'function') {
+				promiseFunctions.push(arg);
+			} else {
+				throw new TypeError(`promisePipe: Argument #${i} unknown type '${typeof arg}'`);
+			}
+		});
 		if (!sourceStream || !sourceStream.on) {
 			throw new TypeError(`sourceStream must be a node stream emitter`);
 		}
-		// options = _.defaults(options, {	});
+		options = _.defaults(options, {
+			catchErrors: true,
+			warnErrors: true,
+			emitStreamErrors: false
+		});
 
 		/* The way this is set up, a promisePipe is potentially an array with multiple promise-returning func's
 		 * If it is, the func's are chained together in a way that is sort of similar to a thru-stream (i think)
@@ -28,10 +50,45 @@ var self = {
 		 * 	- Particularly with respect to buffering/stream flow control. As is, the aggregated promisePipe could potentially cause the source stream to pause
 		 * 	  and/or the stream data to get buffered, as it will not call the callback for stream.Writeable.write until the promiseChain is fulfilled
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
-		return self.streamPromise(sourceStream.pipe(self.writeablePromiseStream(promiseFunctions)), { resolveEvent: 'finish' });
+		var pp = self.streamPromise(sourceStream.pipe(self.writeablePromiseStream(options, ...promiseFunctions)), { resolveEvent: 'finish' });
+		if (options.catchErrors) {
+			pp = pp.catch(err => { console.error(`promisePipe error: ${err.stack||err}`); });
+		}
+		return pp;
 	},
 
-	writeablePromiseStream(...promiseFunctions/*, options = {}*/) {
+	artefactDataPipe(artefact, data, ...promiseFunctions) {
+		// if (typeof artefact !== 'object') {
+			// throw new TypeError(`artefact invalid`);
+		// } else if (!(data instanceof mongoose.Document)) {
+			// throw new TypeError(`data should be a mongoose.Document`);
+		// }
+		return self.chainPromiseFuncs(promiseFunctions)(data).then(() => artefact);
+		 // (a => 
+			// );
+	},
+
+	writeablePromiseStream(...args/*, options = {}*/) {
+		var options, promiseFunctions = [];
+
+		_.forEach(args, (arg, i) => {
+			if (typeof arg === 'object') {
+				if (promiseFunctions.length > 0) {
+					throw new TypeError('promisePipe: arguments must end with promise functions');
+				}
+				options = arg;
+			} else if (typeof arg === 'function') {
+				promiseFunctions.push(arg);
+			} else {
+				throw new TypeError(`promisePipe: Argument #${i} unknown type '${typeof arg}'`);
+			}
+		});
+		options = _.defaults(options, {
+			catchErrors: true,
+			warnErrors: true,
+			emitStreamErrors: false
+		});
+
 		promiseFunctions = self.chainPromiseFuncs(_.isArray(promiseFunctions[0]) && _.every(promiseFunctions[0], pf => _.isFunction(pf)) ? promiseFunctions[0] : promiseFunctions);
 		console.debug(`promiseFunctions: ${/*inspect*/(promiseFunctions)}`);
 		return new stream.Writable({
@@ -40,8 +97,8 @@ var self = {
 				promiseFunctions(data)//.finally(() => callback()).done();
 				.then(newData => { callback(null /*, newData*/ ); })		// pass newData as 2nd arg if using a thru stream instead of a writeable
 				.catch(err => {
-					console.warn(`warning: ${err.stack||err}`);
-					/*options.enableStreamErrors ? */callback(err) /*: callback()*/;
+					options.warnErrors && console.warn(`warning: ${err.stack||err}`);
+					options.emitStreamErrors ? callback(err) : callback();
 				})		// ^ way to disable stream errors is to add a catch() function as one of the promiseFunctions
 				.done();
 			}

@@ -1,5 +1,5 @@
 "use strict";
-var console = require('../stdio.js').Get('modules/audio', { minLevel: 'debug' });	// debug verbose
+var console = require('../stdio.js').Get('modules/audio', { minLevel: 'log' });	// debug verbose
 const inspect =	require('../utility.js').makeInspect({ depth: 1, compact: true });
 const inspectPretty = require('../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 // const baseFs = require('../fs.js');
@@ -47,16 +47,11 @@ var nativeSchema = new mongoose.Schema({
 
 });
 
-var metadataSchema = new mongoose.Schema({
+var audioSchema = new mongoose.Schema({
     format: formatSchema,
     common: commonSchema,
     native: nativeSchema
 });
-
-var audioSchema = new mongoose.Schema({
-    fileId: { type: mongoose.SchemaTypes.ObjectId, required: true, unique: true },
-    metadata: metadataSchema
-}, { /*_id: false*/ });
 
 // audioSchema.virtual('file').set(function(file) {
 //     this._file = file;
@@ -74,18 +69,19 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
     console.debug(`audio=${inspectPretty(audio)} file=${inspectPretty(file)}`);
     return mm.parseFile(file.path).then(metadata => {
         console.debug(`metadata=${inspectPretty(metadata)}`);
-        audio.updateDocument({ metadata });//metadata = metadata;
+        audio.updateDocument(metadata);//metadata = metadata;
         return audio;
     }).catch(err => {
         var e = new Error( `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`);
         e.stack = err.stack;
         console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
         model._stats.errors.push(e);
-        return audio;
+        // return audio;
+        throw e;
     });
 });
 
 // audioSchema.method('toString', function toString(options) {
 //     return inspect(this, options || { depth: 0, compact: true });
 // })
-module.exports = mongoose.model('Audio', audioSchema);
+module.exports = mongoose.model('audio', audioSchema);

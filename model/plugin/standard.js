@@ -29,7 +29,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		return next();
 	});
 	schema.post('validate', function(err, doc, next) {
-		console.debug(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+		console.error(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.validate.errors.push(err);
 		return next(err);
 	});
@@ -47,7 +47,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		return next();
 	});
 	schema.post('save', function(err, doc, next) {
-		console.debug(`stat: post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+		console.error(`stat: post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.save.errors.push(err);
 		return next(err);
 	});
@@ -102,6 +102,85 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
 		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : new (model)(data)));	//new (this)(data)));//this.create(data)));
+	});
+
+	/*
+	 * Artefact related
+	 */
+
+	schema.add({ _metaParent: { type: mongoose.SchemaTypes.ObjectId, required: false, default: null  } });
+
+	/* Find a _meta document from the given model(table)
+	 * */
+	schema.method('getArtefact', function getArtefact() {
+		
+		var doc = this;
+		var docModel = this.constructor;
+		var docModelName = docModel.modelName;
+
+		var getPropertyDescriptor = function getPropertyDescriptor(value) {
+			return {
+				configurable: true,
+				writeable: true,
+				enumerable: true,
+				value: value
+			};
+		};
+
+		var a = Object.create({
+			
+			bulkSave(options) {
+				options = _.assign({
+					maxBatchSize: 10,
+					batchTimeout: 750
+				}, options);
+				console.verbose(`Artefact.bulkSave: ${inspect(this, { compact: false })}`);
+				return Q.all(
+					_.map(this, (data, dataName) => data.bulkSave(options.meta && options.meta[dataName] ? options.meta[dataName] : options))
+				)
+				.then(() => this);
+			},
+
+			addMetaData(modelName) {
+					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
+				// if (Object.hasOwnProperty(this, modelName)) {
+					if (this[modelName]) {
+					console.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
+					return Q(this);
+				} else {
+					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
+					var model = mongoose.model(modelName);
+					if (!model) throw new Error(`model '${modelName}' does not exist`);
+					var data = new model({ _metaParent: doc._id });/*model.create();*/
+					// data.updateDocument({ _metaParent: doc._id });
+					// data._metaParent = doc._id;
+					// return data.validate().then(() => 
+					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, data=${inspect(data, { compact: false })}`);
+					return Object.defineProperty(this, modelName, getPropertyDescriptor(data));
+					// );
+				}
+			}
+
+		}, {
+			[docModelName]: getPropertyDescriptor(doc)
+		});
+		
+		var allModels = mongoose.modelNames();
+		return Q.all(_.map(allModels, modelName => {
+			var model = mongoose.model(modelName);
+			return model.findOne({ _metaParent: { $eq: doc._id } }).exec().then(meta => {
+			console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}`);
+				if (meta) {
+					Object.defineProperty(a, modelName, getPropertyDescriptor(meta));
+				}
+			});
+		})).then(() => {;
+
+		console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`);
+		return Q(a);
+
+	});
+	
 	});
 
 };

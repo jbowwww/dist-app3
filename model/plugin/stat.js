@@ -19,7 +19,7 @@ const _ = require('lodash');
 			`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total}, created: ${this.created}, updated: ${this.updated}, checked: ${this.checked}`;
 		var keys = _.keys(_.omit(this, ['errors', 'calls', 'success', 'failed', 'total', 'created', 'updated', 'checked']));
 		if (this.errors && this.errors.length > 0) keys.push('errors');
-		r += _.map(keys, k => (",\n"+" ".repeat(options.indentationLvl+1)+k+": "+util.inspect(k !== 'errors' ? this[k] : _.map(this.errors, e => e.message), options /*{ compact: true }*/))).join();
+		r += _.map(keys, k => (",\n"+" ".repeat(options.indentationLvl+1)+k+": "+util.inspect(k !== 'errors' ? this[k] : _.map(this.errors, e => e/*.message*/), options /*{ compact: true }*/))).join();
 		r += (keys.length > 0?"\n"+" ".repeat(options.indentationLvl+1):" ")+"}";
 		return r;
 	});
