@@ -26,40 +26,59 @@ const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
 
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, conditionalPipe, streamPromise }  = require('./promise-pipe.js');
+const { Observable, Subject, ReplaySubject, from, of, range } = require('rxjs');
+const { map, filter, switchMap } = require('rxjs/operators');
+
+// range(1, 200)
+//   .pipe(filter(x => x % 2 === 1), map(x => x + x))
+//   .subscribe(x => console.log(x));
 
 var hashPaths = [];
 var hpInterval = setInterval(() => {
 	console.verbose(`hashPaths: ${inspect(hashPaths)}`);
 }, 10000);
 
-mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
+mongoose.connect("mongodb://localhost:27017/ArtefactsJS2", { useNewUrlParser: true })
 
-.then(() => promisePipe({ concurrency: 8 },
-	fsIterate({ path: '/', maxDepth: 0, filter(dirEntry) { return !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path); } }),
-	fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) ,
-	// fsEntry => fsEntry.bulkSave(),
-	conditionalPipe(
-		fsEntry => fsEntry.fileType === 'file' && !fsEntry.isCheckedSince(fsEntry.stats.mtime),
-		// file => file.bulkSave(),
-		file => {
-			hashPaths.push(file.path);
-			return file.doHash().finally(() => {
-				_.remove(hashPaths, path => path === file.path);
-			});
-		}),
-	file => file.bulkSave()			) )
-	
-.then(() => promisePipe({ concurrency: 8 },
-	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
-	audio: conditionalPipe( 
-		audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),
-		audio => {
-			hashPaths.push(audio._artefact.file.path);
-			return audio.loadMetadata(audio._artefact.file).finally(() => {
-				_.remove(hashPaths, path => path === audio._artefact.file.path);
-			});
-		}) } } ),
-	a => a.bulkSave() 				 ) )
+.then(() => {
+	var p = Q.Promise((resolve, reject) => {//promisePipe({ concurrency: 8 },
+		console.log(`Observable=${inspect(Observable)}`);
+		var o = Observable.fromEvent(
+			fsIterate({
+				path: '/', maxDepth: 0,
+				filter: (dir) => !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dir.path)
+			}), 'data')
+			.pipe(
+				map(fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry)),
+				map(fsEntry => ({ [fsEntry.fileType]: fsEntry })),
+				map(a => a.file && (!a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime)) ? fsEntry.doHash() : a),
+				filter(a => a.file && new Regex(/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path)),
+				map(a => _.assign(a, { audio: Audio.findOrCreate({ _primary: a.file }) })),
+				map(a => !a.audio.isCheckedSince(a.file.stats.mtime) ? a.audio.loadMetadata(a.file) : a)
+			);
+		var s = o.subscribe(
+			a => {
+				console.log(`Observable fsIterate: a=${inspect(a)}`);
+				return a.bulkSave();
+			},
+			err => reject(err),
+			() => resolve()
+		);
+		console.log(`o=${inspect(o)} s=${inspect(s)}`);
+	});
+	return p;
+})
+// .then(() => promisePipe({ concurrency: 8 },
+// 	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
+// 	audio: conditionalPipe( 
+// 		audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),
+// 		audio => {
+// 			hashPaths.push(audio._artefact.file.path);
+// 			return audio.loadMetadata(audio._artefact.file).finally(() => {
+// 				_.remove(hashPaths, path => path === audio._artefact.file.path);
+// 			});
+// 		}) } } ),
+// 	a => a.bulkSave() 				 ) )
 
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 
