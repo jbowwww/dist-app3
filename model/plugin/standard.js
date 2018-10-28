@@ -27,7 +27,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.post('validate', function(doc, next) {
 		console.debug(`stat: post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		this.constructor._stats.validate.success++;
-		return next();
+			return next();
 	});
 	schema.post('validate', function(err, doc, next) {
 		console.error(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
@@ -109,7 +109,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * Artefact related
 	 */
 
-	schema.add({ _metaParent: { type: mongoose.SchemaTypes.ObjectId, required: false, default: null  } });
+	schema.add({
+		// _artefact: { type: mongoose.SchemaTypes.Mixed, required: false, default: undefined },
+		_primary: { type: mongoose.SchemaTypes.ObjectId, refPath: '_primaryType', required: false, default: undefined },
+		_primaryType: { type: String, required: false/*true*/, default: undefined }
+	});
+	schema.virtual('_artefact');
 
 	/* Find a _meta document from the given model(table)
 	 * */
@@ -127,16 +132,16 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var docModel = this.constructor;
 		var docModelName = docModel.modelName;
 
-		var getPropertyDescriptor = function getPropertyDescriptor(value) {
-			return {
-				configurable: true,
-				writeable: true,
-				enumerable: true,
-				value: value
-			};
-		};
+		doc._primary = doc;
+		doc._primaryType = docModelName;
 
 		var a = Object.create({
+			
+			// get _primaryDataType() { return docModelName; },
+			// get _primaryDataId() { return doc._id; },
+			// get _primaryData() { return doc; },
+
+			// get [docModelName]() { return doc; },
 			
 			bulkSave(opts) {
 				opts = _.assign({
@@ -160,32 +165,40 @@ module.exports = function standardSchemaPlugin(schema, options) {
 					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
 					var model = mongoose.model(modelName);
 					if (!model) throw new Error(`model '${modelName}' does not exist`);
-					var data = new model({ _metaParent: doc._id });/*model.create();*/
+					var data = new model({ _artefact: a, _primary: doc, _primaryType: docModelName });	//_metaParent: doc._id });/*model.create();*/
 					// data.updateDocument({ _metaParent: doc._id });
 					// data._metaParent = doc._id;
 					// return data.validate().then(() => 
 					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, data=${inspect(data, { compact: false })}`);
-					return Object.defineProperty(this, modelName, getPropertyDescriptor(data));
+					return Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: data });
 					// );
 				}
 			}
 
 		}, {
-			[docModelName]: getPropertyDescriptor(doc)
+			// _primaryDataType: { enumerable: true, value: docModelName },
+			// _primaryDataId: doc._id,
+			[docModelName]: { writeable: true, enumerable: true, value: doc }
 		});
-		
+
+		doc._artefact = a;
+
 		var allModels = options.meta ? _.keys(options.meta) : mongoose.modelNames();
 		return Q.all(_.map(allModels, modelName => {
 			var model = mongoose.model(modelName);
-			return model.findOrCreate({ _metaParent: doc._id })
+			return model.findOrCreate({ _primary: doc, _primaryType: docModelName })
 			// .exec()
 			.then(meta => {
-					console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}`);
-					meta && Object.defineProperty(a, modelName, getPropertyDescriptor(meta));
-				}).then(() => (options.meta && options.meta[modelName] ?
-				typeof options.meta[modelName] === 'function' ? options.meta[modelName](a)
-			 :  _.isArray(options.meta[modelName]) ? chainPromiseFuncs(options.meta[modelName])(a)
-			 : 	Q(a) : Q(a)));
+				console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}`);
+				if (meta) {
+					Object.defineProperty(a, modelName, { writeable: true, enumerable: true, value: meta });
+					meta._artefact = a;
+				}
+				return (options.meta && options.meta[modelName] ?
+					typeof options.meta[modelName] === 'function' ? options.meta[modelName](meta)
+		 		:  _.isArray(options.meta[modelName]) ? chainPromiseFuncs(options.meta[modelName])(meta)
+			 : 	Q(meta) : Q(meta));
+			})
 		}))
 		.then(() => {
 
@@ -196,4 +209,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	
 	});
 
+	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
+		if (!_.isDate(timestamp)) {
+			throw new TypeError(`isCheckedSince: timestamp must be a Date`);
+		}
+		return !this.isNew && this._ts.checkedAt < timestamp;
+	});
 };

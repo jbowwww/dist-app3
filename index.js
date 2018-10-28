@@ -1,4 +1,3 @@
-
 /* 180926 : dist-app3
  * Another re-write, where artefact types are each in their own table
  * This should hopefully avoid the difficulty and awkardness related to static member functions and data properties on embedded document schemas.
@@ -7,10 +6,7 @@
  *		181028: This is not true now :) 
  *	- Any document model may reference another as required, whether its conceptually inheriting, containing, or referencing the referenced type,
  *	  but does so directly and explicitly in it's own terms
- *	- In such cases I think document IDs and mongoose populate() will be used, although not 100% decided here yet
- */
-
-// Don't know what if anything to actually put in this file just seemed a good place to put a quick readme in
+ *	- In such cases I think document IDs and mongoose populate() will be used, although not 100% decided here yet */
 
 "use strict";
 
@@ -40,16 +36,17 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 )/*.delay(1200)*/.then(() => 
 
 	promisePipe(	File.find().cursor(),
-					file => file.ensureCurrentHash(),
+					conditionalPipe(
+						file => !file.isCheckedSince(file.stats.mtime),
+						file => file.doHash() ),
 					file => file.bulkSave()									)
 
 )/*.delay(1200)*/.then(() => 
 
 	promisePipe(	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
-		audio: a => artefactDataPipe(a, a.audio,
-			conditionalPipe( 
-				audio => audio.isNew || audio._ts.checkedAt < a.file.stats.mtime || a.audio._ts.checkedAt < new Date(),
-				audio => audio.loadMetadata(a.file))) } }),
+		audio: conditionalPipe( 
+			audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),	//stats.mtime),// || a.audio._ts.checkedAt < new Date(),
+			audio => audio.loadMetadata(audio._artefact.file)) } }),
 		a => a.bulkSave() )
 	
 ).catch(err => { console.error(`error: ${err.stack||err}`); })

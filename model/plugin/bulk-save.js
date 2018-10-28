@@ -46,7 +46,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				if (doc.isNew) {
 					bsOp = { insertOne: { document: doc.toObject() } };
 				} else if (doc._id !== null && doc.isModified()) {
-					bsOp = { updateOne: { filter: { _id: doc.get('_id') }, update: { $set: doc } } };
+					bsOp = { updateOne: { filter: { _id: doc.get('_id') }, update: { $set: doc.toObject() } } };
 				} else {
 					model._stats.bulkSave.items.unmodified++;
 					model._stats.bulkSave.success++;
