@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -120,7 +120,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * */
 	schema.static('getArtefacts', function getArtefacts(query, options = {}) {
 		var model = this;
-		console.log(`toArtefact(): model=${inspect(model, { compact: false })}, options=${inspect(options, { compact: false })}`);
+		console.verbose(`[model ${model.modelName}].getArtefacts(): options=${inspect(options, { compact: true })}`);	// model=${inspect(model, { compact: false })}, 
 		return model.find(query).cursor({ transform: doc => doc.getArtefact(options) });
 	});
 
@@ -132,9 +132,16 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var docModel = this.constructor;
 		var docModelName = docModel.modelName;
 
-		doc._primary = doc;
-		doc._primaryType = docModelName;
-
+		if (!doc._primary) {
+			// doesn't have a _primary _id reference to a primary - creating a new artefact with this data type as the priamry
+			doc._primary = doc;
+			doc._primaryType = docModelName;
+		} else if (doc._primary != doc._id) {
+			// _primary reference refers to another data type as the primary doc - get the artefact via that type
+			return doc.populate('_primary').execPopulate().then(_primary => _primary.getArtefact(options));
+		}
+		// the _primary reference refers to itself - this artefact already exists and this data type is the primary
+		
 		var a = Object.create({
 			
 			// get _primaryDataType() { return docModelName; },

@@ -10,7 +10,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const util = require('util');
 const _ = require('lodash');
@@ -27,39 +27,26 @@ const Audio = require('./model/audio.js');
 
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, conditionalPipe, streamPromise }  = require('./promise-pipe.js');
 
-var hashPaths = [];
-var hpInterval = setInterval(() => {
-	console.verbose(`hashPaths: ${inspect(hashPaths)}`);
-}, 10000);
-
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
 .then(() => promisePipe({ concurrency: 8 },
-	fsIterate({ path: '/', maxDepth: 0, filter(dirEntry) { return !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path); } }),
+	// fsIterate({ path: '/', maxDepth: 0, filter(dirEntry) { return !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path); } }),
+	fsIterate({ path: '/home/jk/Documents', maxDepth: 0, filter(dirEntry) { return !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path); } }),
 	fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) ,
-	// fsEntry => fsEntry.bulkSave(),
-	conditionalPipe(
-		fsEntry => fsEntry.fileType === 'file' && !fsEntry.isCheckedSince(fsEntry.stats.mtime),
-		// file => file.bulkSave(),
-		file => {
-			hashPaths.push(file.path);
-			return file.doHash().finally(() => {
-				_.remove(hashPaths, path => path === file.path);
-			});
-		}),
-	file => file.bulkSave()			) )
-	
+	fsEntry => fsEntry.bulkSave() ) )
+
 .then(() => promisePipe({ concurrency: 8 },
 	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
-	audio: conditionalPipe( 
-		audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),
-		audio => {
-			hashPaths.push(audio._artefact.file.path);
-			return audio.loadMetadata(audio._artefact.file).finally(() => {
-				_.remove(hashPaths, path => path === audio._artefact.file.path);
-			});
-		}) } } ),
-	a => a.bulkSave() 				 ) )
+
+		file: conditionalPipe(
+			file => !file.isCheckedSince(fsEntry.stats.mtime), 
+			file => file.doHash() ),
+		
+		audio: conditionalPipe( 
+			audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),
+			audio => audio.loadMetadata(audio._artefact.file) ) } } ),
+
+	a => a.bulkSave() ) )
 
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 
@@ -69,10 +56,6 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 .finally(() => { 
 	console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`);
-	if (hpInterval) {
-		clearInterval(hpInterval);
-		hpInterval = null;
-	}
 })
 
 .done();
