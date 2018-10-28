@@ -43,50 +43,6 @@ file.methods.doHash = function() {
 	});	
 };
 
-/* Ensures the file doc ('this') has a hash value, and that the doc's updatedAt is more recent than the file's mtime ('stats.mtime')
- * returns: the file/this, with hash calculated
- */
-file.methods.ensureCurrentHash = function(cb) {
-	var file = this;
-	var model = this.constructor;
-	var debugPrefix = `[${typeof model} ${model.modelName}]`;
-	model._stats.ensureCurrentHash.calls++;
-	console.debug(`${debugPrefix}.ensureCurrentHash():  file='${file.path}'`);// this.constructor=${this.constructor} this.constructor.prototype=${this.constructor.prototype}`)
-	return Q.Promise((resolve, reject, notify) => {
-		var oldHash = file.hash;
-		console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' modifiedPaths=${file.modifiedPaths().join(' ')} tsu=${file._ts.updatedAt} mtime=${file.stats.mtime} tsu-mtime=${file._ts.updatedAt - file.stats.mtime}`);
-		if (!oldHash || !file._ts.updatedAt || file.isModified('stats.mtime') || (file._ts.updatedAt < (file.stats.mtime))) {
-			if (!oldHash) { console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' undefined file.hash, hashing...`); }
-			else { console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' outdated file.hash=..${file.hash.substr(-6)}, hashing...`); }
-			/*return*/ hashFile(file.path).then((hash) => {
-				model._stats.ensureCurrentHash.success++;
-				if (!oldHash) { model._stats.ensureCurrentHash.created++; }
-				else { model._stats.ensureCurrentHash.updated++; }
-				file.hash = hash;
-				console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
-				resolve (file);				// return file;
-			})
-			.catch(err => ensureCurrentHashHandleError(err, 'hash error', reject))
-			.done();
-		} else {
-			model._stats.ensureCurrentHash.success++;
-			model._stats.ensureCurrentHash.checked++;
-			console.debug(`${debugPrefix}.ensureCurrentHash: file='${file.path}' current file.hash=..${file.hash.substr(-6)}, no action required`);
-			resolve(file);			// return file;
-		}
-	});
-
-	function ensureCurrentHashHandleError(err, prefix, cb) {
-		if (typeof prefix === 'function') {
-			cb = prefix;
-			prefix = 'Error';
-		}
-		console.warn(prefix + ': ' + err);//.stack||err.message||err);
-		model._stats.ensureCurrentHash.errors.push(err);
-		if (cb) process.nextTick(() => cb(err));
-	}
-};
-
 /* 1612949298: TOOD: instead of storing raw aggregation operation pipeline arrays, if you could somehow hijack/override the Aggregate(?) returned by
  * model.aggregate, and set its prototype to a new object that contains functions of the same names as below, and inherits from the original
  * prototype of the Aggregate object. The funcs can then take parameters too (e.g. sizeMoreThan(1024) or duplicates({minimumGroupSize: 3})) and gives

@@ -31,7 +31,7 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 	promisePipe(	fsIterate({ path: '/media/jk/Stor/mystuff/Moozik/samples/', maxDepth: 4 }),
 					fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) ,
-					fsEntry => fsEntry.bulkSave())//.save()							)
+					fsEntry => fsEntry.bulkSave()			)
 
 )/*.delay(1200)*/.then(() => 
 
@@ -39,15 +39,15 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 					conditionalPipe(
 						file => !file.isCheckedSince(file.stats.mtime),
 						file => file.doHash() ),
-					file => file.bulkSave()									)
+					file => file.bulkSave()					)
 
 )/*.delay(1200)*/.then(() => 
 
 	promisePipe(	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
-		audio: conditionalPipe( 
-			audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),	//stats.mtime),// || a.audio._ts.checkedAt < new Date(),
-			audio => audio.loadMetadata(audio._artefact.file)) } }),
-		a => a.bulkSave() )
+					audio: conditionalPipe( 
+						audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt)
+						audio => audio.loadMetadata(audio._artefact.file)) } }),
+					a => a.bulkSave() 						)
 	
 ).catch(err => { console.error(`error: ${err.stack||err}`); })
 // .then(() => Q.delay(18000))
