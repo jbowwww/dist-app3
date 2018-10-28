@@ -31,7 +31,7 @@ var commonSchema = new mongoose.Schema({
         no: Number,
         of: Number
     },
-    year: Number,
+    year: String,
     date: String,
     engineer: [String],
     encodedBy: String,
@@ -77,7 +77,7 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
         console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
         model._stats.errors.push(e);
         // return audio;
-        throw e;
+        // throw e;
     });
 });
 

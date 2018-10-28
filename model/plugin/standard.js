@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -30,7 +30,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			return next();
 	});
 	schema.post('validate', function(err, doc, next) {
-		console.error(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+		// console.error(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.validate.errors.push(err);
 		return next(err);
 	});
@@ -213,6 +213,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		if (!_.isDate(timestamp)) {
 			throw new TypeError(`isCheckedSince: timestamp must be a Date`);
 		}
-		return !this.isNew && this._ts.checkedAt < timestamp;
+		return !this.isNew && this._ts.checkedAt > timestamp;
 	});
 };

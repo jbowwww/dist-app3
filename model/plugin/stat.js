@@ -19,7 +19,9 @@ const _ = require('lodash');
 			`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total}, created: ${this.created}, updated: ${this.updated}, checked: ${this.checked}`;
 		var keys = _.keys(_.omit(this, ['errors', 'calls', 'success', 'failed', 'total', 'created', 'updated', 'checked']));
 		if (this.errors && this.errors.length > 0) keys.push('errors');
-		r += _.map(keys, k => (",\n"+" ".repeat(options.indentationLvl+1)+k+": "+util.inspect(k !== 'errors' ? this[k] : _.map(this.errors, e => e/*.message*/), options /*{ compact: true }*/))).join();
+		r += _.map(keys, k => (",\n"+" ".repeat(options.indentationLvl+1)+k+": "+
+			( k !== 'errors' ? util.inspect(this[k], options)
+		 : 	'[' + this.errors.length + ']' + util.inspect(_.map(this.errors, e => e.message), options /*{ compact: true }*/)))).join();
 		r += (keys.length > 0?"\n"+" ".repeat(options.indentationLvl+1):" ")+"}";
 		return r;
 	});
@@ -57,9 +59,9 @@ module.exports = function statSchemaPlugin(schema, options) {
 			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
 				_.assign({
 					errors: [],
-					[util.inspect.custom](depth, options) {
-						return util.inspect(_.mapValues(this.errors && this.errors.length > 0 ? this : _.omit(this, [ 'errors' ]), (v, k) => v), /*{ compact: true }*/options);
-					}
+					[util.inspect.custom]: statsInspect()/*(depth, options) {
+						return util.inspect(_.mapValues(this.errors && this.errors.length > 0 ? this : _.omit(this, [ 'errors' ]), (v, k) => v), 
+					}*/
 				}, _.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value)))
 			});
 		}

@@ -53,12 +53,12 @@ function iterate(options) {
 						var item = { path, stats, fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown' };
 						if (!stats.isDirectory()) return self.push(item);
 						var currentDepth = pathDepth(item.path) - self.rootDepth + 1;	// +1 because below here next files are read from this dir
-						if ((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) {
+						if (((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {
 							fs.readdir(path, (err, names) => {
 								if (err) return nextHandleError(err);
-								if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
-								console.verbose(`${names.length} entries at depth=${currentDepth}${options.filter ? ' matching \'' + options.filter + '\'' : ''} in dir:${item.path} self.paths=[${self.paths.length}]`);
-								names.forEach(name => self.paths.push(nodePath.join(path, name)));
+								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
+								console.verbose(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
+								_.forEach(names, name => self.paths.push(nodePath.join(path, name)));
 								return self.push(item);
 							});
 						} else {

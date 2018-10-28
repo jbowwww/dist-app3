@@ -5,8 +5,10 @@ const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 've
 const stream = require('stream');
 const _ = require('lodash');
 const inspect = require('util').inspect;
+const mongoose = require('./mongoose.js');
 const Q = require('q');
 const pEvent = require('p-event');
+const through2Concurrent = require('through2-concurrent');
 
 var self = {
 
@@ -42,6 +44,8 @@ var self = {
 			warnErrors: true,
 			emitStreamErrors: false
 		});
+
+console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(options, { compact: true })} promiseFunctions[${promiseFunctions.length}]`);
 
 		/* The way this is set up, a promisePipe is potentially an array with multiple promise-returning func's
 		 * If it is, the func's are chained together in a way that is sort of similar to a thru-stream (i think)
@@ -86,24 +90,61 @@ var self = {
 		options = _.defaults(options, {
 			catchErrors: true,
 			warnErrors: true,
-			emitStreamErrors: false
+			emitStreamErrors: false,
+			concurrency: 4
 		});
+		// var threads = new Queue();//Array(options.concurrency);
+		var threadCount = 0;
+	var debugThreadInterval = null;
 
 		promiseFunctions = self.chainPromiseFuncs(_.isArray(promiseFunctions[0]) && _.every(promiseFunctions[0], pf => _.isFunction(pf)) ? promiseFunctions[0] : promiseFunctions);
 		console.debug(`promiseFunctions: ${/*inspect*/(promiseFunctions)}`);
-		return new stream.Writable({
-			objectMode: true,
-			write(data, encoding, callback) {
-				promiseFunctions(data)//.finally(() => callback()).done();
-				.then(newData => { callback(null /*, newData*/ ); })		// pass newData as 2nd arg if using a thru stream instead of a writeable
-				.catch(err => {
-					options.warnErrors && console.warn(`warning: ${err.stack||err}`);
-					options.emitStreamErrors ? callback(err) : callback();
-				})		// ^ way to disable stream errors is to add a catch() function as one of the promiseFunctions
-				.done();
+		return through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
+			// var self = this;
+			threadCount++;
+			if (!debugThreadInterval) {
+				debugThreadInterval = setInterval(() => {
+					console.verbose(`writeablePromiseStream.write start: threadCount=${threadCount}`);//data=${inspect(data instanceof mongoose.Document ? data.toObject() : data, { compact: true })}`);
+				}, 5000);
+			}
+			promiseFunctions(data).then(newData => {
+				// console.debug(`writeablePromiseStream.write end`);//data=${inspect(data, { compact: true })}`);
+				callback();
+			}).catch(err => {
+				options.warnErrors && console.warn(`warning: ${err.message}`);//stack||err}`);
+				options.emitStreamErrors ? callback(err) : callback(); 	//this.emit('error', err);
+			}).finally(() => {
+				threadCount--;
+			}).done();
+		}, function (cb) {
+			if (debugThreadInterval) {
+				clearInterval(debugThreadInterval);
+				debugThreadInterval = null;
 			}
 		});
 	},
+
+/*new stream.Writable({
+			objectMode: true,
+			write(data, encoding, callback) {
+				if (threadCount < options.concurrency) {
+					threads.push(data);
+					console.verbose(`write: threadCount=${threadCount}`);
+					callback();
+					var threadIndex = threadCount - 1;
+					threads[threadIndex] = promiseFunctions(data).then(newData => {
+						threads[threadIndex] = null;
+						threadCount--;
+					 // callback(null); //, newData );
+					 --threads;
+				})		// pass newData as 2nd arg if using a thru stream instead of a writeable
+				.catch(err => {
+					options.warnErrors && console.warn(`warning: ${err.stack||err}`);
+					options.emitStreamErrors && this.emit('error', err);//callback(err) : callback();
+				})		// ^ way to disable stream errors is to add a catch() function as one of the promiseFunctions
+				.done();
+			}
+		});*/
 
 	chainPromiseFuncs(...args) {
 		var chain;

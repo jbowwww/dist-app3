@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'log' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -35,45 +35,50 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 
 		console.debug(`bulkSave(): model.modelName=${model.modelName} doc.isNew=${doc.isNew}`);
 
-		var actionType = doc.isNew ? 'created' : doc.isModified() ? 'updated' : 'checked';
-		model._stats.bulkSave[actionType]++;
-		model._stats.bulkSave.calls++;
-
 		return Q.Promise((resolve, reject, notify) => {
 			doc.validate().then(() => {
-					
-				var bsOp = null;
-				if (doc.isNew) {
-					bsOp = { insertOne: { document: doc.toObject() } };
-				} else if (doc._id !== null && doc.isModified()) {
-					bsOp = { updateOne: { filter: { _id: doc.get('_id') }, update: { $set: doc.toObject() } } };
-				} else {
-					model._stats.bulkSave.items.unmodified++;
-					model._stats.bulkSave.success++;
-					console.debug(`${model.modelName}.bulkSave unmodified doc=${inspect(doc._doc)}`);
-				}
+				
+				var actionType = doc.isNew ? 'created' : doc.isModified() ? 'updated' : 'checked';
+				model._stats.bulkSave[actionType]++;
+				model._stats.bulkSave.calls++;
 
-				if (bsOp) {
-					model._stats.bulkSave.items[_.keys(bsOp)[0]]++;
+				var bsOp =	actionType === 'created' ?
+					{ op: { insertOne: { document: doc.toObject() } }, resolve() { doc.isNew = false; }, doc: doc }
+				 : 	{ op: { updateOne: { filter: { _id: doc.get('_id') }, update: { $set: doc.toObject() } } }, doc: doc };
+
+				// if (doc.isNew) {
+				// 	bsOp = { op: { insertOne: { document: doc.toObject() } }, resolve() { doc.isNew = false; }, doc: doc };
+				// } else if (doc._id !== null && doc.isModified()) {
+				// 	bsOp = { op: { updateOne: { filter: { _id: doc.get('_id') }, update: { $set: doc.toObject() } } }, doc: doc };
+				// } else {
+				// 	model._stats.bulkSave.items.unmodified++;
+				// 	model._stats.bulkSave.success++;
+				// 	console.debug(`${model.modelName}.bulkSave unmodified doc=${inspect(doc._doc)}`);
+				// }
+
+				// if (bsOp) {
+					model._stats.bulkSave.items[_.keys(bsOp.op)[0]]++;
 					if (!model._bulkSave) model._bulkSave = [];
-					model._bulkSave.push({ op: bsOp, resolve: resolve.bind(this, doc), reject });
+					model._bulkSave.push(bsOp);
 					if (model._bulkSave.length >= options.maxBatchSize) {
-						process.nextTick(() => innerBulkSave());
+						if (model._bulkSaveTimeout) {
+							clearTimeout(model._bulkSaveTimeout);
+							delete model._bulkSaveTimeout;
+						}
+						/*process.nextTick(() =>*/ innerBulkSave()/*)*/;
 					} else if (!model._bulkSaveTimeout) {
 						model._bulkSaveTimeout = setTimeout(innerBulkSave, options.batchTimeout);
 					}
-				}				
+				// }				
 				resolve(doc);
 				
 				function innerBulkSave() {
-					var bs = model._bulkSave;
+					var bs = /*_.slice*/(model._bulkSave);
 					model._bulkSave = [];
-					if (model._bulkSaveTimeout) {
-						clearTimeout(model._bulkSaveTimeout);
-						delete model._bulkSaveTimeout;
-					}
-					// console.debug(`${model.modelName}.bulkWrite([${bs.length}]=${inspect(bs.map(bsEntry => bsEntry.op), { depth: 3, compact: true })}`);
-					model.bulkWrite(bs.map(bsEntry => 	bsEntry.op)).then(bulkWriteOpResult => {
+					console.verbose(`${model.modelName}.bulkWrite([${bs.length}]=${inspect(bs.map(bsEntry => bsEntry.op), { depth: 3, compact: true })}`);
+					model.bulkWrite(_.map(bs, bsEntry => bsEntry.op)).then(bulkWriteOpResult => {
+						// _.forEach(bs, bsEntry => bsEntry.resolve && bsEntry.resolve());
+						// _.forEach(bs, bsEntry => bsEntry.doc.isNew = false);
 						if (bulkWriteOpResult.result.ok) {
 							model._stats.bulkSave.success += bulkWriteOpResult.result.nModified;
 							console.debug(`${model.modelName}.innerBulkSave(): bulkWriteOpResult=${inspect(bulkWriteOpResult)}`);

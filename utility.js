@@ -5,7 +5,7 @@ const _ = require('lodash');
 const EventEmitter = require('events');//eventemitter3');
 const util = require('util');
 
-var _defaultInspectOptions = { depth: 1, breakLength: 77 /* Infinity */, colors: false, compact: true };
+var _defaultInspectOptions = { depth: 1, breakLength: /*77*/  Infinity , colors: false, compact: true };
 var makeInspect = (defaultOptions) => {
 	var baseOptions = mixin({}, _defaultInspectOptions, defaultOptions);
 	console.debug(`makeInspect: baseOptions=${inspect(baseOptions)}`);//_innerInspect=${_innerInspect}`);
