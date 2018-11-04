@@ -13,7 +13,7 @@ let file = new mongoose.Schema({
 	hash: { type: String, required: false }
 });
 
-file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
+file.plugin(require('../plugin/stat.js'));
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
 file.virtual('extension').get(function extension() {

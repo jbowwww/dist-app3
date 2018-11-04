@@ -10,64 +10,82 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const util = require('util');
 const _ = require('lodash');
 const mongoose = require('./mongoose.js');
 const Q = require('q');
 
-const fsIterate = require('./fs/iterate.js');
-const hashFile = require('./fs/hash.js');
-
+const Artefact = require('./model/Artefact.js');
 const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
 
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, conditionalPipe, streamPromise }  = require('./promise-pipe.js');
-const { Observable, Subject, ReplaySubject, from, of, range } = require('rxjs');
-const { map, filter, switchMap } = require('rxjs/operators');
+const { Observable, Subject, ReplaySubject, from, of, range, fromEvent, interval, iif, pipe } = require('rxjs');
+const { map, tap, filter, switchMap } = require('rxjs/operators');
 
-// range(1, 200)
-//   .pipe(filter(x => x % 2 === 1), map(x => x + x))
-//   .subscribe(x => console.log(x));
+const fsIterate = (...args) => fromEvent(require('./fs/iterate.js')(...args), 'data');
+// const hashFile = require('./fs/hash.js');
 
-var hashPaths = [];
-var hpInterval = setInterval(() => {
-	console.verbose(`hashPaths: ${inspect(hashPaths)}`);
-}, 10000);
+function fromPromise(promiseFunction) {
+	return function fromPromiseImplementation(source) {
+		return Observable.create(subscriber => {
+			return source.subscribe(inValue => {
+				promiseFunction(inValue)
+				.then(outValue => subscriber.next(outValue))
+				.catch(err => subscriber.error(err));
+			},
+			err => subscriber.error(err),
+			() => subscriber.complete());
+		})
+	};
+}
+
+function objectFromPromises(promiseObjectFunction = () => ({})) {
+	return function objectFromPromisesImplementation(source) {
+		return Observable.create(subscriber => {
+			return source.subscribe(inValue => {
+				var outValue = promiseObjectFunction(inValue);
+				Q.all(_.values(_.mapValues(outValue, (field, fieldName) => Q.isPromiseAlike(field) ?
+					field.then(newField => Object.defineProperty(outValue, fieldName, { configurable: true, writeable: true, enumerable: true, value: newField }))
+				 : 	Q(field))))
+				.then(() => subscriber.next(outValue))
+				.catch(err => subscriber.error(err));
+			},
+			err => subscriber.error(err),
+			() => subscriber.complete());
+		});
+	};
+}
+
+var debug = interval(5000).subscribe(() => console.log(`fsIterate: models[]._stats: ${util.inspect(_.mapValues(mongoose.models, model => model._stats), { compact: false })}`));
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS2", { useNewUrlParser: true })
-
-.then(() => {
-	var p = Q.Promise((resolve, reject) => {//promisePipe({ concurrency: 8 },
-		console.log(`Observable=${inspect(Observable)}`);
-		var o = Observable.fromEvent(
-			fsIterate({
-				path: '/', maxDepth: 0,
-				filter: (dir) => !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dir.path)
-			}), 'data')
-			.pipe(
-				map(fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry)),
-				map(fsEntry => ({ [fsEntry.fileType]: fsEntry })),
-				map(a => a.file && (!a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime)) ? fsEntry.doHash() : a),
-				filter(a => a.file && new Regex(/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path)),
-				map(a => _.assign(a, { audio: Audio.findOrCreate({ _primary: a.file }) })),
-				map(a => !a.audio.isCheckedSince(a.file.stats.mtime) ? a.audio.loadMetadata(a.file) : a)
-			);
-		var s = o.subscribe(
-			a => {
-				console.log(`Observable fsIterate: a=${inspect(a)}`);
-				return a.bulkSave();
-			},
-			err => reject(err),
-			() => resolve()
-		);
-		console.log(`o=${inspect(o)} s=${inspect(s)}`);
-	});
-	return p;
-})
+.then(() => Q.Promise((resolve, reject) => {
+	fsIterate({
+		path: '/media/jk/Stor/mystuff/Moozik/samples', maxDepth: 2,
+		filter: (dir) => !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dir.path)
+	}).pipe(
+		objectFromPromises(fsEntry => new Artefact({ [fsEntry.fileType]: FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) })),
+		filter(a => a.file &&  (!a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime))),
+		tap(a => a.file.doHash()),
+		filter(a => a.file && (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path)),
+		objectFromPromises(a => _.assign(a, { audio: Audio.findOrCreate({ _primary: a.file }) })),
+		tap(a => console.verbose(`A: ${inspect(a)}`)),
+		filter(a => !a.audio.isCheckedSince(a.file.stats.mtime)),
+		tap(a => a.audio.loadMetadata(a.file))
+	).subscribe(
+		a => {
+			console.verbose(`Observable fsIterate: a=${inspect(a)}`);
+			return a.bulkSave();
+		},
+		err => reject(err),
+		() => resolve()
+	);
+}))
 // .then(() => promisePipe({ concurrency: 8 },
 // 	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
 // 	audio: conditionalPipe( 
@@ -86,12 +104,9 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS2", { useNewUrlParser: tr
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.finally(() => { 
+.finally(() => {
 	console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`);
-	if (hpInterval) {
-		clearInterval(hpInterval);
-		hpInterval = null;
-	}
+	debug./*unsubscribe*/complete();
 })
 
 .done();

@@ -30,15 +30,16 @@ file.methods.doHash = function() {
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
 	model._stats.ensureCurrentHash.calls++;
 	return hashFile(file.path).then((hash) => {
-		model._stats.ensureCurrentHash.success++;
 		if (!file.hash) { model._stats.ensureCurrentHash.created++; }
 		else { model._stats.ensureCurrentHash.updated++; }
 		file.hash = hash;
 		console.debug(`${debugPrefix}.doHash(): file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
 		return file;
 	}).catch(err => {
-		console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
-		model._stats.ensureCurrentHash.errors.push(err);
+		var e = new Error(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
+        e.stack = err.stack;
+        console.warn(e.message);
+		model._stats.ensureCurrentHash.errors.push(e);
 		return file;	// should i really actually be catching an err then returning file like nothing happened??
 	});	
 };

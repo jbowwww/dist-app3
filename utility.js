@@ -13,7 +13,7 @@ var makeInspect = (defaultOptions) => {
 		var opts = mixin({}, baseOptions, options);
 		console.verbose(`_innerInspect(subject: ${inspect(subject)}, options: ${inspect(options)}):\n\tbaseOptions=${inspect(baseOptions)}\n\topts=${inspect(opts)}`);
 		var r = util.inspect(subject, opts);
-		return opts.compact ? r.replace(/\ *\n\ */g, ' ') : r;
+		return opts.compact ? r.replace(/\n/g, ' ') : r;
 	};
 };
 var inspect = (subject, options) => util.inspect(subject, mixin({}, _defaultInspectOptions, options));

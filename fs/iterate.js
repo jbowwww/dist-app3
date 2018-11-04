@@ -69,7 +69,7 @@ function iterate(options) {
 					return nextHandleError(err);
 				}
 				function nextHandleError(err) {
-					console.warn(`iterate: ${err.stack||err}`);
+					// console.warn(`iterate: ${err.stack||err}`);
 					self.errors.push(err);
 					process.nextTick(() => self.emit('error', err));
 					return next();//1;

@@ -26,7 +26,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 	schema.post('validate', function(doc, next) {
 		console.debug(`stat: post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
-		this.constructor._stats.validate.success++;
+		// this.constructor._stats.validate.success++;
 			return next();
 	});
 	schema.post('validate', function(err, doc, next) {
@@ -44,7 +44,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 	schema.post('save', function(doc, next) {
 		console.debug(`stat: post('save'): id=${this._id.toString()}`);
-		this.constructor._stats.save.success++;
+		// this.constructor._stats.save.success++;
 		return next();
 	});
 	schema.post('save', function(err, doc, next) {

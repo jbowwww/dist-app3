@@ -61,13 +61,15 @@ var audioSchema = new mongoose.Schema({
 audioSchema.plugin(require('./plugin/timestamp.js'));
 audioSchema.plugin(require('./plugin/standard.js'));
 audioSchema.plugin(require('./plugin/bulk-save.js'));
-audioSchema.plugin(require('./plugin/stat.js'), { data: { save: {}, validate: {} } });
+audioSchema.plugin(require('./plugin/stat.js'), { data: { loadMetadata: {} } });
 
 audioSchema.method('loadMetadata', function loadMetadata(file) {
     var audio = this;
     var model = this.constructor;
     console.debug(`audio=${inspectPretty(audio)} file=${inspectPretty(file)}`);
     return mm.parseFile(file.path).then(metadata => {
+        if (!audio.format && !audio.common && !audio.native) { model._stats.loadMetadata.created++; }
+        else { model._stats.loadMetadata.updated++; }
         console.debug(`metadata=${inspectPretty(metadata)}`);
         audio.updateDocument(metadata);//metadata = metadata;
         return audio;
@@ -75,8 +77,8 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
         var e = new Error( `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`);
         e.stack = err.stack;
         console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
-        model._stats.errors.push(e);
-        // return audio;
+        model._stats.loadMetadata.errors.push(e);
+        return audio;
         // throw e;
     });
 });

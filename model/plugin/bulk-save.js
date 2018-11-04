@@ -80,7 +80,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 						// _.forEach(bs, bsEntry => bsEntry.resolve && bsEntry.resolve());
 						// _.forEach(bs, bsEntry => bsEntry.doc.isNew = false);
 						if (bulkWriteOpResult.result.ok) {
-							model._stats.bulkSave.success += bulkWriteOpResult.result.nModified;
+							// model._stats.bulkSave.success += bulkWriteOpResult.result.nModified;
 							console.debug(`${model.modelName}.innerBulkSave(): bulkWriteOpResult=${inspect(bulkWriteOpResult)}`);
 						} else {
 							_.each(bulkWriteOpResult.result.writeErrors, writeError => {
