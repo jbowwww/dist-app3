@@ -61,7 +61,24 @@ function objectFromPromises(promiseObjectFunction = () => ({})) {
 	};
 }
 
-var debug = interval(5000).subscribe(() => console.log(`fsIterate: models[]._stats: ${util.inspect(_.mapValues(mongoose.models, model => model._stats), { compact: false })}`));
+
+function conditional(conditionFunction, conditinalAction) {
+	return function conditionalImplementation(source) {
+		return Observable.create(subscriber => {
+			return source.subscribe(inValue => {
+				try {
+					Q(conditionFunction(value) ? conditionalAction(value) : value)
+					.then(value => subscriber.next(value);
+				} catch (err) {
+					subscriber.error(err);
+				}
+			},
+			err => subscriber.error(err),
+			() => subscriber.complete());
+		});
+	};
+}
+// var debug = interval(5000).subscribe(() => console.log(`fsIterate: models[]._stats: ${util.inspect(_.mapValues(mongoose.models, model => model._stats), { compact: false })}`));
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS2", { useNewUrlParser: true })
 .then(() => Q.Promise((resolve, reject) => {
@@ -70,11 +87,18 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS2", { useNewUrlParser: tr
 		filter: (dir) => !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dir.path)
 	}).pipe(
 		objectFromPromises(fsEntry => new Artefact({ [fsEntry.fileType]: FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) })),
-		filter(a => a.file &&  (!a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime))),
-		tap(a => a.file.doHash()),
-		filter(a => a.file && (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path)),
+		conditional(
+			a => a.file &&  (!a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime)),
+			a => a.file.doHash() ),
+		tap(a => console.verbose(`A1: ${inspect(a)} file.isNew=${(a.file||a.dir).isNew}`)),
+		// filter(a => a.file &&  (!a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime))),
+		// tap(a => console.verbose(`A2: ${inspect(a)} file.isNew=${a.file.isNew}`)),
+		// tap(a => a.file.doHash()),
+		conditional(
+			a => a.file && (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path)
+			),
 		objectFromPromises(a => _.assign(a, { audio: Audio.findOrCreate({ _primary: a.file }) })),
-		tap(a => console.verbose(`A: ${inspect(a)}`)),
+		tap(a => console.verbose(`A3: ${inspect(a)} file.isNew=${a.file.isNew} audio.isNew=${a.audio.isNew}`)),
 		filter(a => !a.audio.isCheckedSince(a.file.stats.mtime)),
 		tap(a => a.audio.loadMetadata(a.file))
 	).subscribe(
@@ -106,7 +130,7 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS2", { useNewUrlParser: tr
 
 .finally(() => {
 	console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`);
-	debug./*unsubscribe*/complete();
+	// debug./*unsubscribe*/complete();
 })
 
 .done();

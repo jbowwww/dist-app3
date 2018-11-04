@@ -102,7 +102,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var dk = schema.options.discriminatorKey;
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
-		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : new (model)(data)));	//new (this)(data)));//this.create(data)));
+		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : this.create(data)/*new (model)(data)*/));	//new (this)(data)));//));
 	});
 
 	/*

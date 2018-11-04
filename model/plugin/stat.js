@@ -11,7 +11,7 @@ const _ = require('lodash');
 //
 
 	var statsInspect = ((indent = 0) => function (depth, options) {
-		options = _.defaults({ compact: true }, options, { breakLength: 0 });
+		options = _.defaults({ compact: true }, options, { breakLength: 88 });
 		// console.log(`statsInspect(depth=${depth}, options=${JSON.stringify(options)}`);
 		// var r = `{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total}, created: ${this.created}, updated: ${this.updated}, checked: ${this.checked}`;
 		 // : 	'';
@@ -23,7 +23,7 @@ const _ = require('lodash');
 		//  : 	'[' + this.errors.length + ']' + util.inspect(_.map(this.errors, e => e.message), options /*{ compact: true }*/)))).join();
 		// r += (keys.length > 0?"\n"+" ".repeat(options.indentationLvl+1):" ")+"}";
 		// return r;
-		return /*util.inspect*/(_.mapValues(_.omit(this, this.errors && this.errors.length > 0 ? [] : ['errors']), (v, k) => (k !== 'errors' ? v : ('['+v.length+']: '+/*util.inspect*/(v/*, options*/))))/*, options*/);
+		return util.inspect(_.mapValues(_.omit(this, this.errors && this.errors.length > 0 ? [] : ['errors']), (v, k) => (k !== 'errors' ? v : ('['+v.length+']: '+util.inspect(v, options)))), options);
 	});
 	var addStatsInspect = (statsObject, indent) => _.set(statsObject, util.inspect.custom, statsInspect(indent).bind(statsObject));
 
@@ -38,7 +38,7 @@ function getNewStatBasicCountsObject(extra) {
 		checked: 0,
 		errors: []
 	});
-	_.assign(s, _.mapValues(_.cloneDeep(extra), (k, v) => addStatsInspect(v, 1)));//, 1));///*, 1*/)));	//, (value, key) => !_.isPlainObject(value) ? value : 	//  _.set(value, util.inspect.custom, function(depth, options) { return util.inspect(_.mapValues(this, (v, k) => v), { compact: true }); })));//addStatsInspect(value, 2)));
+	_.assign(s, _.mapValues(_.cloneDeep(extra), (v, k) => !_.isPlainObject(v) ? v : addStatsInspect(v, 1)));//, 1));///*, 1*/)));	//, (value, key) => 	//  _.set(value, util.inspect.custom, function(depth, options) { return util.inspect(_.mapValues(this, (v, k) => v), { compact: true }); })));//addStatsInspect(value, 2)));
 	return addStatsInspect(s, 0);
 }
 
@@ -61,13 +61,13 @@ console.log(`schema._stats: ${inspect(schema._stats)}`);
 					// },
 					// [util.inspect.custom]: statsInspect()
 					[util.inspect.custom]: function(depth, options) {
-						options = _.defaults({ compact: true }, options, { breakLength: 0/*88*/ });
+						options = _.defaults({ compact: true }, options, { /*breakLength: 0*//*88*/ });
 						// console.log(`util.inspect.custom(depth=${depth}, options=${JSON.stringify(options)}`);
 					// 	return /*util.*/inspect(_.mapValues(this.errors && this.errors.length > 0 ? this : _.omit(this, [ 'errors' ]), (v, k) => v), options); 
 					// }
 					// toString(...args) {
 						// console.log(`toString(args=${inspect(args)})`);
-						return util.inspect(_.mapValues(this, (v, k) => /*util.inspect*/(v/*, _.defaults({ compact: true }, options)*/)), options);///*)*/)/*, options*/);//{ compact: true, breakLength: 88 });
+						return /*util.inspect*/(_.mapValues(this, (v, k) => /*util.inspect*/(v/*, _.defaults({ compact: true }, options)*/))/*, options*/);///*)*/)/*, options*/);//{ compact: true, breakLength: 88 });
 					}
 				}, _.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value)))
 			});
