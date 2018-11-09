@@ -24,55 +24,32 @@ const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
+const Artefact = require('./Artefact.js');
 
-const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, conditionalPipe, streamPromise }  = require('./promise-pipe.js');
-
-var hashPaths = [];
-var hpInterval = setInterval(() => {
-	console.verbose(`hashPaths: ${inspect(hashPaths)}`);
-}, 10000);
+const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, ifPipe, conditionalTap, streamPromise }  = require('./promise-pipe.js');
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
-.then(() => promisePipe({ concurrency: 8 },
-	fsIterate({ path: '/', maxDepth: 0, filter(dirEntry) { return !['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path); } }),
-	fsEntry => FsEntry.findOrCreate({ path: fsEntry.path }, fsEntry) ,
-	// fsEntry => fsEntry.bulkSave(),
-	conditionalPipe(
-		fsEntry => fsEntry.fileType === 'file' && !fsEntry.isCheckedSince(fsEntry.stats.mtime),
-		// file => file.bulkSave(),
-		file => {
-			hashPaths.push(file.path);
-			return file.doHash().finally(() => {
-				_.remove(hashPaths, path => path === file.path);
-			});
-		}),
-	file => file.bulkSave()			) )
-	
-.then(() => promisePipe({ concurrency: 8 },
-	File.getArtefacts({ path: { $regex: /^.*\.(wav|mp3|au|flac)$/i } }, { meta: {
-	audio: conditionalPipe( 
-		audio => !audio.isCheckedSince(audio._artefact.file._ts.updatedAt),
-		audio => {
-			hashPaths.push(audio._artefact.file.path);
-			return audio.loadMetadata(audio._artefact.file).finally(() => {
-				_.remove(hashPaths, path => path === audio._artefact.file.path);
-			});
-		}) } } ),
-	a => a.bulkSave() 				 ) )
+.then(() => promisePipe(
+	{ concurrency: 8 },
+	fsIterate({
+		path: '/home/jk',
+		maxDepth: 0,
+		filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path))
+	}),
+	fs => Artefact(FsEntry.findOrCreate({ path: fs.path }, fs)),
+	ifPipe(a => a.file,
+		ifPipe(a => !a.file.isCheckedSince(a.file.stats.mtime), 					a => a.file.doHash()),
+		ifPipe(a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio,		a => a.addMetaData('audio', {})),
+		ifPipe(a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime),			a => a.audio.loadMetadata(a.file))),		//a.file._ts.updatedAt), /* doesn't work without having done a validate() first */
+	a => a.bulkSave()
+))
 
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 
-.finally(() => mongoose.connection.close()
+.delay(1500).finally(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.finally(() => { 
-	console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`);
-	if (hpInterval) {
-		clearInterval(hpInterval);
-		hpInterval = null;
-	}
-})
-
+.finally(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
 .done();

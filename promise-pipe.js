@@ -39,8 +39,11 @@ var self = {
 		if (!sourceStream || !sourceStream.on) {
 			throw new TypeError(`sourceStream must be a node stream emitter`);
 		}
+		if (typeof options.catchErrors === 'boolean' && options.catchErrors) {
+			delete options.catchErrors;	// unset so default gets set
+		}
 		options = _.defaults(options, {
-			catchErrors: true,
+			catchErrors: err => { console.error(`promisePipe error${err.promisePipeData ? (' (data: ' + inspect(err.promisePipeData, { compact: true }) + ')') : ''}: ${err.stack||err}`); },
 			warnErrors: true,
 			emitStreamErrors: false
 		});
@@ -55,8 +58,8 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 		 * 	  and/or the stream data to get buffered, as it will not call the callback for stream.Writeable.write until the promiseChain is fulfilled
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
 		var pp = self.streamPromise(sourceStream.pipe(self.writeablePromiseStream(options, ...promiseFunctions)), { resolveEvent: 'finish' });
-		if (options.catchErrors) {
-			pp = pp.catch(err => { console.error(`promisePipe error: ${err.stack||err}`); });
+		if (typeof options.catchErrors === 'function') {
+			pp = pp.catch(err => options.catchErrors);
 		}
 		return pp;
 	},
@@ -87,8 +90,11 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 				throw new TypeError(`promisePipe: Argument #${i} unknown type '${typeof arg}'`);
 			}
 		});
+		if (typeof options.catchErrors === 'boolean' && options.catchErrors) {
+			delete options.catchErrors;	// unset so default gets set
+		}
 		options = _.defaults(options, {
-			catchErrors: true,
+			catchErrors: err => { console.error(`promisePipe error${err.promisePipeData ? (' (data: ' + inspect(err.promisePipeData, { compact: true }) + ')') : ''}: ${err.stack||err}`); },
 			warnErrors: true,
 			emitStreamErrors: false,
 			concurrency: 4
@@ -111,7 +117,9 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 				// console.debug(`writeablePromiseStream.write end`);//data=${inspect(data, { compact: true })}`);
 				callback();
 			}).catch(err => {
-				options.warnErrors && console.warn(`warning: ${err.message}`);//stack||err}`);
+				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: data });
+				options.warnErrors && console.warn(`warning: ${err.stack||err}`);
+				options.catchErrors && typeof options.catchErrors === 'function' && options.catchErrors(err);
 				options.emitStreamErrors ? callback(err) : callback(); 	//this.emit('error', err);
 			}).finally(() => {
 				threadCount--;
@@ -168,6 +176,10 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 
 	conditionalPipe(condition, ...pipe1) {//, pipe2 = null) {
 		return (data => condition(data) ? (self.chainPromiseFuncs(pipe1))(data) : data);// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
+	},
+
+	ifPipe(condition, ...pipe1) {//, pipe2 = null) {
+		return (data => (condition(data) ? (self.chainPromiseFuncs(pipe1))(data) : Q()).then(() => data));// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
 	},
 
 	streamPromise(stream, options = {}) {

@@ -135,6 +135,18 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		doc._primary = doc;
 		doc._primaryType = docModelName;
 
+		function doMetaPipe(meta, promisePipe) {
+			if (!promisePipe) {
+				return meta;
+			}
+			if (_.isArray(promisePipe)) {
+				promisePipe = chainPromiseFuncs(promisePipe);
+			} else if (typeof promisePipe !== 'function') {
+				throw new TypeError(`doMetaPipe: promisePipe should be a function or array, but is a ${typeof promisePipe}`);
+			}
+			return promisePipe(meta);
+		}
+
 		var a = Object.create({
 			
 			// get _primaryDataType() { return docModelName; },
@@ -155,24 +167,45 @@ module.exports = function standardSchemaPlugin(schema, options) {
 				.then(() => this);
 			},
 
-			addMetaData(modelName) {
-					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
-				// if (Object.hasOwnProperty(this, modelName)) {
-					if (this[modelName]) {
+			addMetaData(modelName, data, promisePipe) {
+				console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
+				if (this[modelName]) {
 					console.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
 					return Q(this);
 				} else {
 					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
 					var model = mongoose.model(modelName);
 					if (!model) throw new Error(`model '${modelName}' does not exist`);
-					var data = new model({ _artefact: a, _primary: doc, _primaryType: docModelName });	//_metaParent: doc._id });/*model.create();*/
-					// data.updateDocument({ _metaParent: doc._id });
-					// data._metaParent = doc._id;
-					// return data.validate().then(() => 
+					var data = doMetaPipe(new model(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data)), promisePipe);
 					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, data=${inspect(data, { compact: false })}`);
-					return Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: data });
-					// );
+					return Q(Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: data }));
 				}
+			},
+
+			addOrFindMetaData(modelName, data, promisePipe) {
+				var model = mongoose.model(modelName);
+				return model.findOrCreate(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data))
+				.then(meta => {
+					console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}, promisePipe: ${promisePipe?'yes':'no'}`);
+					if (meta) {
+						meta = doMetaPipe(meta, promisePipe);
+						// meta._artefact = this;
+						Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta });
+					}
+				}).then(() => this);
+			},
+
+			findMetaData(modelName, promisePipe) {
+				var model = mongoose.model(modelName);
+				return model.findOne({ _primary: doc, _primaryType: docModelName })
+				.then(meta => {
+					console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${!meta?'(null)':inspect(meta, { compact: false })}`);
+					if (meta) {
+						meta = doMetaPipe(meta, promisePipe);
+						// meta._artefact = this;
+						Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta });
+					}
+				}).then(() => this);
 			}
 
 		}, {
@@ -184,28 +217,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		doc._artefact = a;
 
 		var allModels = options.meta ? _.keys(options.meta) : mongoose.modelNames();
-		return Q.all(_.map(allModels, modelName => {
-			var model = mongoose.model(modelName);
-			return model.findOrCreate({ _primary: doc, _primaryType: docModelName })
-			// .exec()
-			.then(meta => {
-				console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}`);
-				if (meta) {
-					Object.defineProperty(a, modelName, { writeable: true, enumerable: true, value: meta });
-					meta._artefact = a;
-				}
-				return (options.meta && options.meta[modelName] ?
-					typeof options.meta[modelName] === 'function' ? options.meta[modelName](meta)
-		 		:  _.isArray(options.meta[modelName]) ? chainPromiseFuncs(options.meta[modelName])(meta)
-			 : 	Q(meta) : Q(meta));
-			})
-		}))
-		.then(() => {
-
-			console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`);
-			return Q(a);
-
-		});
+		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
+		.then(() => { console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
+		.then(() => Q(a));
 	
 	});
 
