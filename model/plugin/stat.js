@@ -45,6 +45,8 @@ function getNewStatBasicCountsObject(extra) {
 }
 
 module.exports = function statSchemaPlugin(schema, options) {
+	options = _.defaults(options, { data: {} });
+	
 	// console.debug(`statSchemaPlugin(): options=${inspect(options)}, this=${inspect(this)}`);
 	if (schema._stats === undefined) {
 		Object.defineProperty(schema, '_stats', { enumerable: true, writeable: true, configurable: true, value: { } });

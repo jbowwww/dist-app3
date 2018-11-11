@@ -156,6 +156,12 @@ function promisifyPipeline(pipeline, options) {
 	return promisifyEmitter(pipeline, { resolveEvent: 'finish' })
 }
 
+// Returns a new object with the same property names as the input object, but where all object methods are replaced with promisify'd/denodeify'd wrappers
+function promisifyMethods(obj) {
+	typeof obj !== 'object' && throw new TypeError(`promisifyMethods: obj should be an object`);
+	return _.mapValues(obj, (v, k) => typeof v !== 'function' ? v : Q.denodeify(v);
+}
+
 function pipeline(...transforms) {
 	var transform, stage;
 	// console.debug(`pipeline: transforms: ${(transforms).map(t => t.constructor.name).join(', ')}`);///${transforms.map(t => 'through2(options: ' + JSON.stringify(t.options) + ')\n').join()}`);

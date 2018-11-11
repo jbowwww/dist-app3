@@ -28,19 +28,24 @@ const Artefact = require('./Artefact.js');
 
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, ifPipe, conditionalTap, streamPromise }  = require('./promise-pipe.js');
 
+/*var searchEntireFileSys = {
+	path: '/',
+	maxDepth: 0,
+	filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path))
+};*/
+
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
-.then(() => promisePipe(
-	{ concurrency: 8 },
-	fsIterate({
-		path: '/home/jk',
-		maxDepth: 0,
-		filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path))
-	}),
+.then(() => promisePipe({ concurrency: 8 },
+	fsIterate({ path: '/home/jk', maxDepth: 0 }),
 	fs => Artefact(FsEntry.findOrCreate({ path: fs.path }, fs)),
 	ifPipe(a => a.file,
-		ifPipe(a => !a.file.isCheckedSince(a.file.stats.mtime), 					a => a.file.doHash()),
-		ifPipe(a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio,		a => a.addMetaData('audio', {})),
+		ifPipe(
+			a => !a.file.isCheckedSince(a.file.stats.mtime), 
+			a => a.file.doHash()),
+		ifPipe(
+			a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio,
+			 a => a.addMetaData('audio', {})),
 		ifPipe(a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime),			a => a.audio.loadMetadata(a.file))),		//a.file._ts.updatedAt), /* doesn't work without having done a validate() first */
 	a => a.bulkSave()
 ))

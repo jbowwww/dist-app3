@@ -1,15 +1,17 @@
 "use strict";
 
-const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 // const inspectPretty = require('../utility.js').makeInspect({ depth: 2, compact: false });
-// const _ = require('lodash');
+const _ = require('lodash');
 // const Q = require('q');
 const mongoose = require('mongoose');
 const timestampPlugin = require('../plugin/timestamp.js');
 const statPlugin = require('../plugin/stat.js');
 const bulkSavePlugin = require('../plugin/bulk-save.js');
 const standardPlugin = require('../plugin/standard.js');
+const Disk = require('./disk.js');
+const Partition = require('./partition.js');
 
 var statSchema = new mongoose.Schema({
 	"dev" : Number,
@@ -45,8 +47,18 @@ var statSchema = new mongoose.Schema({
 // });
 
 var fsEntry = new mongoose.Schema({
-	path: { type: String, unique: true, index: true, required: true },
-	stats : { type: statSchema },
+	path: { type: String, unique: true, index: true, required: true, set: function(val) {
+		// console.debug(`fsEntry.path.set('${val}'): this=${inspect(this)}`);
+		/*this.*/var part = _.find(Partition.partitions,
+			// _.sortBy(Partition.partitions, part => 1024 - part.mountpoint ? part.mountpoint.length || 0 : 0),
+			function(p) { return p.mountpoint && val.startsWith(p.mountpoint); });
+		console.debug(`fsEntry.path.set('${val}'): part=${inspect(/*this.*/part)}`);
+		// this.path = val;
+		return val;
+	} },
+	disk: { type: Disk.schema },
+	partition: { type: Partition.schema },
+	stats: { type: statSchema },
 	children: [{ type: mongoose.SchemaTypes.ObjectId, ref: String, default: undefined, required: false }]
 }, {
 	discriminatorKey: 'fileType'
