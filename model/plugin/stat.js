@@ -15,14 +15,18 @@ const _ = require('lodash');
 		// var r = inspectPretty(_.mapValues(_.omit(this, ['errors']), (value, propName) => /*inspect*/(this[propName]/*, { compact: true }*/)));//.join(',\n');
 	 // 	return !this.errors || !this.errors.length ? r
 	 // 	 : r.substring(0, r.length - 2) + '\n' + '\t'.repeat(indent+1) + 'Errors: ' + this.errors.map(err=>err.message/*.stack*/).join(',\n') + '\n' + '\t'.repeat(indent) + '}';
-		var r = /*inspectPretty*/
-			`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total}, created: ${this.created}, updated: ${this.updated}, checked: ${this.checked}`;
-		var keys = _.keys(_.omit(this, ['errors', 'calls', 'success', 'failed', 'total', 'created', 'updated', 'checked']));
+		options = _.defaults(options || {}, { compact: true, indentationLvl: 1 });
+		var r = options.compact ? '{ ' : "{\n"+'  '.repeat(options.indentationLvl);/*inspectPretty*/
+		// 	`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total}, created: ${this.created}, updated: ${this.updated}, checked: ${this.checked}`;
+		var keys = _.keys(_.omit(this, ['errors']));//, 'calls', 'success', 'failed', 'total', 'created', 'updated', 'checked']));
 		if (this.errors && this.errors.length > 0) keys.push('errors');
-		r += _.map(keys, k => (",\n"+" ".repeat(options.indentationLvl+1)+k+": "+
-			( k !== 'errors' ? util.inspect(this[k], options)
-		 : 	'[' + this.errors.length + ']' + util.inspect(_.map(this.errors, e => e.message), options /*{ compact: true }*/)))).join();
-		r += (keys.length > 0?"\n"+" ".repeat(options.indentationLvl+1):" ")+"}";
+		r += _.map(keys, k => (/*", "+" ".repeat(options.indentationLvl+1)+*/k+": "+
+			( k !== 'errors' ? util.inspect(this[k], /*_.assign(*//*options*//*, { compact: true })*/)
+		 : 	'[' + this.errors.length + ']' +
+		util.inspect(_.map(this.errors, e => e.message), _.assign(options, { compact: true })))))
+		.join(options.compact ? ", " : ",\n"+'  '.repeat(options.indentationLvl));
+		// r += (keys.length > 0?" "+" ".repeat(options.indentationLvl+1):" ")+"}";
+		r += options.compact ? ' }' : "\n"+'  '.repeat(options.indentationLvl-1)+"}";
 		return r;
 	});
 	var addStatsInspect = (statsObject, indent) => _.set(statsObject, util.inspect.custom, statsInspect(indent).bind(statsObject));
@@ -38,9 +42,9 @@ function getNewStatBasicCountsObject(extra) {
 		checked: 0,
 		errors: []
 	});
-	_.assign(s, //_.cloneDeep(extra));
-		_.mapValues(_.cloneDeep(extra), (value, key) => !_.isPlainObject(value) ? value : 
-			_.set(value, util.inspect.custom, function(depth, options) { return util.inspect(_.mapValues(this, (v, k) => v), { compact: true }); })));//addStatsInspect(value, 2)));
+	_.assign(s, _.cloneDeep(extra));
+		// _.mapValues(_.cloneDeep(extra), (value, key) => !_.isPlainObject(value) ? value : 
+		// 	_.set(value, util.inspect.custom, function(depth, options) { return util.inspect(_.mapValues(this, (v, k) => v), { compact: false }); })));//addStatsInspect(value, 2)));
 	return addStatsInspect(s, 0);
 }
 

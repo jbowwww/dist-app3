@@ -14,8 +14,6 @@ const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js')
 module.exports = function standardSchemaPlugin(schema, options) {
 
 	console.verbose(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
-
-	schema.plugin(require('./stat.js'), { data: { save: {}, validate: {} } });
 	
 	schema.pre('validate', function(next) {
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';

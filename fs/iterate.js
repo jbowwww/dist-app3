@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'log' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 // const util = require('util');
 const _ = require('lodash');
@@ -57,7 +57,7 @@ function iterate(options) {
 							fs.readdir(path, (err, names) => {
 								if (err) return nextHandleError(err);
 								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
-								console.verbose(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
+								console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
 								_.forEach(names, name => self.paths.push(nodePath.join(path, name)));
 								return self.push(item);
 							});

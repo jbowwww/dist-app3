@@ -18,7 +18,21 @@ var makeInspect = (defaultOptions) => {
 };
 var inspect = (subject, options) => util.inspect(subject, mixin({}, _defaultInspectOptions, options));
 
-module.exports = { formatSize , padNumber , roundNumber , padString , isEmptyString , isNullOrEmptyString , isNullOrWhitespaceString , makeInspect , inspect, pipeline, promisifyEmitter, promisifyPipeline };
+module.exports = {
+	formatSize ,
+	padNumber ,
+	roundNumber ,
+	padString ,
+	isEmptyString ,
+	isNullOrEmptyString ,
+	isNullOrWhitespaceString ,
+	makeInspect ,
+	inspect,
+	pipeline,
+	promisifyEmitter,
+	promisifyMethods,
+	promisifyPipeline
+};
 
 // return a string with the supplied size in bytes, formatted as B, KB, MB, GB or TB
 function formatSize(size, options = { precision: 2, spacer: ' ' }) {
@@ -158,8 +172,10 @@ function promisifyPipeline(pipeline, options) {
 
 // Returns a new object with the same property names as the input object, but where all object methods are replaced with promisify'd/denodeify'd wrappers
 function promisifyMethods(obj) {
-	typeof obj !== 'object' && throw new TypeError(`promisifyMethods: obj should be an object`);
-	return _.mapValues(obj, (v, k) => typeof v !== 'function' ? v : Q.denodeify(v);
+	if (typeof obj !== 'object') {
+		throw new TypeError(`promisifyMethods: obj should be an object`);
+	}
+	return _.mapValues(obj, (v, k) => typeof v !== 'function' ? v : Q.denodeify(v));
 }
 
 function pipeline(...transforms) {

@@ -20,6 +20,7 @@ const Q = require('q');
 const fsIterate = require('./fs/iterate.js');
 const hashFile = require('./fs/hash.js');
 
+const Disk = require('./model/filesys/disk.js');
 const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
@@ -34,8 +35,13 @@ const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs
 	filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path))
 };*/
 
+// Connect to DB
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
+// Wait for all collections to initialise properly
+// .all(_.mapValues(mongoose.models, m => m.init()))
+.then(() => Disk.findOrPopulate())
+//Process filesystem(s)
 .then(() => promisePipe({ concurrency: 8 },
 	fsIterate({ path: '/home/jk', maxDepth: 0 }),
 	fs => Artefact(FsEntry.findOrCreate({ path: fs.path }, fs)),
@@ -50,11 +56,12 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 	a => a.bulkSave()
 ))
 
+// Errors & cleanup
 .catch(err => { console.error(`error: ${err.stack||err}`); })
-
 .delay(1500).finally(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.finally(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => model._stats ))}`); })
+.finally(() => { console.log(`fsIterate: models[]._stats: ${/*_.values*/inspect(_.mapValues(mongoose.models, (model, modelName) => /*inspect*/(model._stats)), { compact: false })/*.join(",\n")*/}`); })
+
 .done();

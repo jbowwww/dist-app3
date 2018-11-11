@@ -27,8 +27,18 @@ mongoose.connection.whenIdle = function whenIdle() {
 	})
 };
 
-// mongoose.plugin(require('./model/plugin/timestamp.js'));
-// mongoose.plugin(require('./model/plugin/standard.js'));
-// mongoose.plugin(require('./model/plugin/bulk-save.js'));
+mongoose.plugin(require('./model/plugin/stat.js'), {
+	data: {
+		save: {},
+		validate: {},
+		bulkSave: {}
+		// 	items: {
+		// 		insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
+		// 		get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
+		// 		// toString() { return util.inspect(this, { compact: true }); }
+		// 	}
+		// }
+	}
+});
 
 module.exports = mongoose;

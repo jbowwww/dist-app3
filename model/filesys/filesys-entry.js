@@ -36,28 +36,18 @@ var statSchema = new mongoose.Schema({
 	_id: false 
 });
 
-// statSchema.pre('init', stats => {
-// 	console.log(`statSchema.pre('init'), ${typeof stats} ${stats.constructor.name} stats: ${inspect(stats)}`);
-// 	// this.type = stats.isFile() ? 'file' : stats.isDirectory() ? 'dir' : 'unknown'
-// });
-
-// statSchema.post('init', stats => {
-// 	console.log(`statSchema.post('init'), ${typeof stats} ${stats.constructor.name} stats: ${inspect(stats)}`);
-// 	// this.type = stats.isFile() ? 'file' : stats.isDirectory() ? 'dir' : 'unknown'
-// });
-
 var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true, set: function(val) {
-		// console.debug(`fsEntry.path.set('${val}'): this=${inspect(this)}`);
-		/*this.*/var part = _.find(Partition.partitions,
-			// _.sortBy(Partition.partitions, part => 1024 - part.mountpoint ? part.mountpoint.length || 0 : 0),
-			function(p) { return p.mountpoint && val.startsWith(p.mountpoint); });
-		console.debug(`fsEntry.path.set('${val}'): part=${inspect(/*this.*/part)}`);
-		// this.path = val;
+		if (!this || (!(this instanceof mongoose.Document))) return val;
+		var disk;
+		Disk.find({ /*mountpoint: { $exists: 1 }*/ }).then(disks => {
+			this.disk = disk = _.find( _.sortBy( disks, disk => disk.mountpoint.length ), disk => val.startsWith(disk.mountpoint) );
+		console.debug(`fsEntry.path.set('${val}'): \n\n\t\n\tdisks=${inspect(disks)}\n\n\t\n\tdisk=${inspect(/*this.*/disk)}\n\n\t\n\tthis=${inspect(this)}`);
+		}).done();
 		return val;
 	} },
-	disk: { type: Disk.schema },
-	partition: { type: Partition.schema },
+	disk: { type: mongoose.SchemaTypes.ObjectId, ref: 'disk' },
+	// partition: { type: Partition.schema },
 	stats: { type: statSchema },
 	children: [{ type: mongoose.SchemaTypes.ObjectId, ref: String, default: undefined, required: false }]
 }, {
