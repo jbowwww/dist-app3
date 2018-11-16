@@ -18,9 +18,9 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 	schema.pre('validate', function(next) {
 		var model = this.constructor;
 		if (!this._ts.createdAt && !this.isNew) {
-			return next(new Error(`${model.modelName}.pre('validate')#timestampSchemaPlugin: !doc._ts.createdAt !this.isNew ${this.isModified()?'':'!'}this.isModified()`));
+			return next(new Error(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: !doc._ts.createdAt !this.isNew ${this.isModified()?'':'!'}this.isModified()`));
 		} else if (this._ts.created && this.isNew) {
-			return next(new Error(`${model.modelName}.pre('validate')#timestampSchemaPlugin: doc._ts.createdAt && this.isNew ${this.isModified()?'':'!'}this.isModified()`));
+			return next(new Error(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: doc._ts.createdAt && this.isNew ${this.isModified()?'':'!'}this.isModified()`));
 		}
 		var now = Date.now();
 		if (this.isNew) {
@@ -30,7 +30,7 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		} else if (!this._ts.updatedAt) {
 			this._ts.checkedAt = now;
 		}
-		console.verbose(`${model.modelName}.pre('validate')#timestampSchemaPlugin: isNew=${this.isNew} ${this.modifiedPaths().join(' ')}`); //this=${inspectPretty(this.schema)} parent=${inspectPretty(this.$parent)}`);
+		console.verbose(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: isNew=${this.isNew} ${this.modifiedPaths().join(' ')}`); //this=${inspectPretty(this.schema)} parent=${inspectPretty(this.$parent)}`);
 		return next();
 	});
 

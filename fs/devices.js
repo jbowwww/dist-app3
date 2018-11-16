@@ -14,5 +14,6 @@ module.exports = async function getDevices() {
 		return devices;
 	} catch (e) {
 		console.error(`error: ${e.stack||e.message||e}`);
+		process.nextTick(() => { throw e; });
 	}
 };

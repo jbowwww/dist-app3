@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -16,37 +16,43 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	console.verbose(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
 	schema.pre('validate', function(next) {
+		var model = this.constructor;
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-		console.debug(`stat: pre('validate'): actionType=${actionType} id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
+		console.debug(`stat: [model ${model.modelName}].pre('validate'): actionType=${actionType} id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		this.constructor._stats.validate[actionType]++;
 		this.constructor._stats.validate.calls++;
 		return next();
 	});
 	schema.post('validate', function(doc, next) {
-		console.debug(`stat: post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
+		var model = this.constructor;
+		console.debug(`stat: [model ${model.modelName}].post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
 		this.constructor._stats.validate.success++;
-			return next();
+		return next();
 	});
 	schema.post('validate', function(err, doc, next) {
-		// console.error(`stat: post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+		var model = this.constructor;
+		console.error(`stat: [model ${model.modelName}].post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.validate.errors.push(err);
 		return next(err);
 	});
 
 	schema.pre('save', function(next) {
+		var model = this.constructor;
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-		console.debug(`stat: pre('save'): actionType=${actionType} id=${this._id.toString()}`);
+		console.debug(`stat: [model ${model.modelName}].pre('save'): actionType=${actionType} id=${this._id.toString()}`);
 		this.constructor._stats.save[actionType]++;
 		this.constructor._stats.save.calls++;
 		return next();
 	});
 	schema.post('save', function(doc, next) {
-		console.debug(`stat: post('save'): id=${this._id.toString()}`);
+		var model = this.constructor;
+		console.debug(`stat: [model ${model.modelName}].post('save'): id=${this._id.toString()}`);
 		this.constructor._stats.save.success++;
 		return next();
 	});
 	schema.post('save', function(err, doc, next) {
-		console.error(`stat: post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+		var model = this.constructor;
+		console.error(`stat: [model ${model.modelName}].post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
 		this.constructor._stats.save.errors.push(err);
 		return next(err);
 	});
@@ -76,6 +82,24 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		return Q(this);
 	});
 
+
+	schema.static('construct', function construct(data, cb) {
+		return Q.Promise((resolve, reject) => {
+			schema.s.hooks.execPre('construct', null, err => {
+				if (err) { 
+					schema.s.hooks.execPost('construct', null, [null], { error: error }, error => error ? reject(error) : resolve(err));
+				} else {
+					try {
+						var n = new (this)(data);
+					} catch (e) {
+						return schema.s.hooks.execPost('construct', n, [null], { error: e }, error => error ? reject(error) : reject(e));
+					}
+					return schema.s.hooks.execPost('construct', n, [null], { error: undefined }, error => error ? reject(error) : resolve(n));
+				}
+			});
+		});
+	});
+
 	/* Find a document in the DB given the query, if it exists, and update the (in memory) document with supplied data.
 	 * Or just create a new doc (in memory, not DB - uses constructor func and not model.create())
 	 * If the schema has a discriminatorKey, checks incoming data object for that key and uses the corresponding discriminator model's functions
@@ -100,12 +124,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var dk = schema.options.discriminatorKey;
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
-		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : new (model)(data)));	//new (this)(data)));//this.create(data)));
+		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : model.construct(data)/*new (model)(data)*/));	//new (this)(data)));//this.create(data)));
 	});
 
-	/*
-	 * Artefact related
-	 */
+	// Artefact related
 
 	schema.add({
 		// _artefact: { type: mongoose.SchemaTypes.Mixed, required: false, default: undefined },

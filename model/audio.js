@@ -76,7 +76,7 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
         e.stack = err.stack;
         console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
         model._stats.errors.push(e);
-        // return audio;
+        return audio;
         // throw e;
     });
 });

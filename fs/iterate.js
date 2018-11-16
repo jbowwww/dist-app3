@@ -21,7 +21,7 @@ module.exports = /* fs.iterate
 // pipeStream (optional): a writeable stream that the fs.iterate readable stream will pipe too, except fs.iterate will still return its own readable unlike
 */
 function iterate(options) {
-	options = _.assign({ path: '.', queueMethod: 'shift', filter: undefined, maxDepth: 1, objectMode: true, highWaterMark: 8 }, options);
+	options = _.assign({ path: '.', queueMethod: 'shift', filter: undefined, maxDepth: 1, removePathPrefix: undefined, objectMode: true, highWaterMark: 8 }, options);
 	var path = nodePath.resolve(options.path);
   	console.verbose(`iterate('${path}', ${inspect(options)})`);
 	var self = _.extend({
@@ -50,7 +50,11 @@ function iterate(options) {
 				try {
 					fs.lstat(path, (err, stats) => {
 						if (err) return nextHandleError(err);
-						var item = { path, stats, fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown' };
+						var item = {
+							path: options.removePathPrefix && path.startsWith(options.removePathPrefix) ? path.substring(options.removePathPrefix.length) : path,
+							stats,
+							fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'
+						};
 						if (!stats.isDirectory()) return self.push(item);
 						var currentDepth = pathDepth(item.path) - self.rootDepth + 1;	// +1 because below here next files are read from this dir
 						if (((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {

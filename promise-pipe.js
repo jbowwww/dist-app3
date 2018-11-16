@@ -10,6 +10,13 @@ const Q = require('q');
 const pEvent = require('p-event');
 const through2Concurrent = require('through2-concurrent');
 
+const defaultCatch = err => { console.warn(`promisePipe error${err.promisePipeData ? (' (data: [' + typeof err.promisePipeData + '] ' + inspect(err.promisePipeData, { compact: true }) + ')') : ''}: ${err.stack||err}`); };
+const defaultOptions = {
+	catchErrors: defaultCatch,
+	emitStreamErrors: false,
+	concurrency: 4
+};
+
 var self = {
 
 	/* promisePipe([sourceStream, ] promiseFunctions [, options])
@@ -42,11 +49,7 @@ var self = {
 		if (typeof options.catchErrors === 'boolean' && options.catchErrors) {
 			delete options.catchErrors;	// unset so default gets set
 		}
-		options = _.defaults(options, {
-			catchErrors: err => { console.error(`promisePipe error${err.promisePipeData ? (' (data: ' + inspect(err.promisePipeData, { compact: true }) + ')') : ''}: ${err.stack||err}`); },
-			warnErrors: true,
-			emitStreamErrors: false
-		});
+		options = _.defaults(options, defaultOptions);
 
 console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(options, { compact: true })} promiseFunctions[${promiseFunctions.length}]`);
 
@@ -57,11 +60,14 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 		 * 	- Particularly with respect to buffering/stream flow control. As is, the aggregated promisePipe could potentially cause the source stream to pause
 		 * 	  and/or the stream data to get buffered, as it will not call the callback for stream.Writeable.write until the promiseChain is fulfilled
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
-		var pp = self.streamPromise(sourceStream.pipe(self.writeablePromiseStream(options, ...promiseFunctions)), { resolveEvent: 'finish' });
-		if (typeof options.catchErrors === 'function') {
-			pp = pp.catch(err => options.catchErrors);
-		}
-		return pp;
+		var writeable = self.writeablePromiseStream(options, ...promiseFunctions);
+		var thenable = self.streamPromise(sourceStream.pipe(writeable), { resolveEvent: 'finish' });
+		return _.mixin(/*self, */thenable, writeable);
+		// var pp = sourceStream.pipe());
+		// if (typeof options.catchErrors === 'function') {
+		// 	pp = pp.catch(err => options.catchErrors);
+		// }
+		// return pp;
 	},
 
 	artefactDataPipe(artefact, data, ...promiseFunctions) {
@@ -93,42 +99,50 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 		if (typeof options.catchErrors === 'boolean' && options.catchErrors) {
 			delete options.catchErrors;	// unset so default gets set
 		}
-		options = _.defaults(options, {
-			catchErrors: err => { console.error(`promisePipe error${err.promisePipeData ? (' (data: ' + inspect(err.promisePipeData, { compact: true }) + ')') : ''}: ${err.stack||err}`); },
-			warnErrors: true,
-			emitStreamErrors: false,
-			concurrency: 4
-		});
+		options = _.defaults(options, defaultOptions);
+
 		// var threads = new Queue();//Array(options.concurrency);
 		var threadCount = 0;
-	var debugThreadInterval = null;
+		var writeCount = 0;
+		var debugThreadInterval = null;
 
 		promiseFunctions = self.chainPromiseFuncs(_.isArray(promiseFunctions[0]) && _.every(promiseFunctions[0], pf => _.isFunction(pf)) ? promiseFunctions[0] : promiseFunctions);
 		console.debug(`promiseFunctions: ${/*inspect*/(promiseFunctions)}`);
+		
 		return through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
-			// var self = this;
+
+			writeCount++;
 			threadCount++;
 			if (!debugThreadInterval) {
+				console.debug(`!debugThreadInterval`);
 				debugThreadInterval = setInterval(() => {
 					console.verbose(`writeablePromiseStream.write start: threadCount=${threadCount}`);//data=${inspect(data instanceof mongoose.Document ? data.toObject() : data, { compact: true })}`);
 				}, 5000);
 			}
-			promiseFunctions(data).then(newData => {
-				// console.debug(`writeablePromiseStream.write end`);//data=${inspect(data, { compact: true })}`);
-				callback();
-			}).catch(err => {
+			console.debug(`through2Concurrent.obj(${inspect(options, {compact:true})}): writeCount=${writeCount} threadCount=${threadCount} data=${inspect(data, { compact:true })}`);
+			
+			promiseFunctions(data)
+			.then(newData => { threadCount--; callback(); })
+			.catch(err => {
 				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: data });
-				options.warnErrors && console.warn(`warning: ${err.stack||err}`);
-				options.catchErrors && typeof options.catchErrors === 'function' && options.catchErrors(err);
-				options.emitStreamErrors ? callback(err) : callback(); 	//this.emit('error', err);
-			}).finally(() => {
+				if (options.catchErrors && typeof options.catchErrors === 'function') {
+					options.catchErrors(err);
+				}
 				threadCount--;
+				if (options.emitStreamErrors) {
+					callback(/*err*/); 	//this.emit('error', err);
+				} else {
+					callback();
+				}
 			}).done();
-		}, function (cb) {
+
+		}, function(cb) {
+			console.verbose(`through2Concurrent.obj.flush: debugThreadInterval=${debugThreadInterval} writeCount=${writeCount} threadCount=${threadCount}`);
 			if (debugThreadInterval) {
 				clearInterval(debugThreadInterval);
 				debugThreadInterval = null;
 			}
+			cb();
 		});
 	},
 
@@ -175,11 +189,11 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 	// },
 
 	conditionalPipe(condition, ...pipe1) {//, pipe2 = null) {
-		return (data => condition(data) ? (self.chainPromiseFuncs(pipe1))(data) : data);// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
+		return (data => condition(data) ? (self.chainPromiseFuncs(pipe1))(data).catch(() => data).then(() => data) : data);// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
 	},
 
 	ifPipe(condition, ...pipe1) {//, pipe2 = null) {
-		return (data => (condition(data) ? (self.chainPromiseFuncs(pipe1))(data) : Q()).then(() => data));// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
+		return (data => (condition(data) ? (self.chainPromiseFuncs(pipe1))(data).catch(() => data).then(() => data) : data));// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
 	},
 
 	streamPromise(stream, options = {}) {

@@ -25,6 +25,6 @@ module.exports = function hash(path, options) {
 	var hashStream = crypto.createHash(options.algorithm);
 	hashStream.setEncoding(options.encoding);
 	return Q(pEvent(pipeline(fs.createReadStream(path, options), hashStream), 'data'))
-	.then(hashData => hashData.toString(options.encoding))
+	.then(hashData => hashData.toString(options.encoding));
 	// .catch(err => console.error(`Hashing error: ${err.stack||err}`));
 }

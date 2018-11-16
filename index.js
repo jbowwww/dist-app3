@@ -35,6 +35,10 @@ const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs
 	filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path))
 };*/
 
+var searches = [
+	{ path: '/home/jk', maxDepth: 0 }
+];
+
 // Connect to DB
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
@@ -42,19 +46,26 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 // .all(_.mapValues(mongoose.models, m => m.init()))
 .then(() => Disk.findOrPopulate())
 //Process filesystem(s)
-.then(() => promisePipe({ concurrency: 8 },
-	fsIterate({ path: '/home/jk', maxDepth: 0 }),
-	fs => Artefact(FsEntry.findOrCreate({ path: fs.path }, fs)),
-	ifPipe(a => a.file,
+.then(() => Q.all(_.map(searches, search => Disk.getDriveForPath(search.path)
+	.then(disk => {
+		console.verbose(`disk=${inspect(disk)}`);
+		return promisePipe({ concurrency: 8 },
+		fsIterate({ path: search.path, maxDepth: search.maxDepth, removePathPrefix: undefined }), //disk && disk.mountpoint ? disk.mountpoint : undefined }),
+		fs => Artefact(FsEntry.findOrCreate({ path: fs.path }, _.set(fs, 'disk', disk))),
 		ifPipe(
-			a => !a.file.isCheckedSince(a.file.stats.mtime), 
-			a => a.file.doHash()),
-		ifPipe(
-			a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio,
-			 a => a.addMetaData('audio', {})),
-		ifPipe(a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime),			a => a.audio.loadMetadata(a.file))),		//a.file._ts.updatedAt), /* doesn't work without having done a validate() first */
-	a => a.bulkSave()
-))
+			a => a.file,
+			ifPipe(
+				a => !a.file.isCheckedSince(a.file.stats.mtime), 
+				a => a.file.doHash()),
+			ifPipe(
+				a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio,
+				a => a.addMetaData('audio', {})),
+			ifPipe(
+				a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime),
+				a => a.audio.loadMetadata(a.file))),		//a.file._ts.updatedAt), /* doesn't work without having done a validate() first */
+		a => a.bulkSave() )
+		.catch(err => { console.warn(`fsIterate: ${err.stack||err}`); });
+	}) )))
 
 // Errors & cleanup
 .catch(err => { console.error(`error: ${err.stack||err}`); })

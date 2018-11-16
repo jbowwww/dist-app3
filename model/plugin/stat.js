@@ -23,7 +23,7 @@ const _ = require('lodash');
 		r += _.map(keys, k => (/*", "+" ".repeat(options.indentationLvl+1)+*/k+": "+
 			( k !== 'errors' ? util.inspect(this[k], /*_.assign(*//*options*//*, { compact: true })*/)
 		 : 	'[' + this.errors.length + ']' +
-		util.inspect(_.map(this.errors, e => e.message), _.assign(options, { compact: true })))))
+		/*util.inspect*/(_.map(this.errors, e => e.message)/*, _.assign(options, { compact: true })*/).join(",\n"))))
 		.join(options.compact ? ", " : ",\n"+'  '.repeat(options.indentationLvl));
 		// r += (keys.length > 0?" "+" ".repeat(options.indentationLvl+1):" ")+"}";
 		r += options.compact ? ' }' : "\n"+'  '.repeat(options.indentationLvl-1)+"}";
