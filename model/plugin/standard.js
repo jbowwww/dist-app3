@@ -84,6 +84,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 
 	schema.static('construct', function construct(data, cb) {
+		console.verbose(`construct: ${inspect(data)}`);
 		return Q.Promise((resolve, reject) => {
 			schema.s.hooks.execPre('construct', null, err => {
 				if (err) { 
