@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -84,20 +84,21 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 
 	schema.static('construct', function construct(data, cb) {
-		return Q.Promise((resolve, reject) => {
-			schema.s.hooks.execPre('construct', null, err => {
-				if (err) { 
-					schema.s.hooks.execPost('construct', null, [null], { error: error }, error => error ? reject(error) : resolve(err));
-				} else {
-					try {
-						var n = new (this)(data);
-					} catch (e) {
-						return schema.s.hooks.execPost('construct', n, [null], { error: e }, error => error ? reject(error) : reject(e));
-					}
-					return schema.s.hooks.execPost('construct', n, [null], { error: undefined }, error => error ? reject(error) : resolve(n));
-				}
-			});
-		});
+		// return Q.Promise((resolve, reject) => {
+		// 	schema.s.hooks.execPre('construct', null, err => {
+		// 		if (err) { 
+		// 			schema.s.hooks.execPost('construct', null, [null], { error: error }, error => error ? reject(error) : resolve(err));
+		// 		} else {
+		// 			try {
+						// var n =
+					return	new (this)(data);
+		// 			} catch (e) {
+		// 				return schema.s.hooks.execPost('construct', n, [null], { error: e }, error => error ? reject(error) : reject(e));
+		// 			}
+		// 			return schema.s.hooks.execPost('construct', n, [null], { error: undefined }, error => error ? reject(error) : resolve(n));
+		// 		}
+		// 	});
+		// });
 	});
 
 	/* Find a document in the DB given the query, if it exists, and update the (in memory) document with supplied data.

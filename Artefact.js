@@ -1,5 +1,5 @@
 "use strict";
-const console = require('./stdio.js').Get('artefact.js', { minLevel: 'log' });	// log verbose debug
+const console = require('./stdio.js').Get('artefact.js', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('./utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -14,7 +14,7 @@ function Artefact(rootData) {
 	}
 	console.verbose(`Artefact.ctor: rootData=${inspect(rootData)}}`);
 	return rootData.then ?
-		rootData.then(root => root.getArtefact())
+		rootData.then(root => { console.verbose(`rootData.then(): root=${inspect(root)}\nrootData=${inspect(rootData)}`); return root.getArtefact(); })
 	 : 	rootData.getArtefact();
 }
 

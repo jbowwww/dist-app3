@@ -40,7 +40,7 @@ disk.static('findOrPopulate', function findOrPopulate() {
 		console.verbose(`disk.on('init').details=${inspect(details)}`);
 		return Q.all(_.map(_.uniqBy(details, 'mountpoint'), detail =>
 			this.findOrCreate({ mountpoint: detail.mountpoint }, detail)
-			.then(disk => disk.save/*bulkSave*/())));
+			.then(disk => disk./*save*/ bulkSave ())));
 	}).catch(err => {
 		console.error(`disk.on('init').drives: error: ${err.stack||err}`);
 		throw err;
