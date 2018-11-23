@@ -8,7 +8,7 @@ const exec = util.promisify(require('child_process').exec)
 
 module.exports = async function getDevices() {
 	try {
-		const { stdout, stderr } = await exec('./fs/lsblk -JO');
+		const { stdout, stderr } = await exec('lsblk -JO');
 		var devices = JSON.parse(stdout);
 		console.debug(`stdout: ${stdout}\nstderr: ${stderr}`);
 		return devices;

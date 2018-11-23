@@ -5,10 +5,12 @@ const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compac
 const { promisifyMethods } = require('../../utility.js');
 const util = require('util');
 const _ = require('lodash');
-const Q = require('q');
-Q.longStackSupport = true;
+// const Q = require('../../q.js');
 const hashFile = require('../../fs/hash.js');
 const mongoose = require('../../mongoose.js');
+const Q = mongoose.Promise;
+// console.verbose(`Q.Promise: ${inspect(Q.Promise)}`);
+
 // const getDevices = require('../../fs/devices.js');
 const { drives, drivesDetail } = promisifyMethods(require('nodejs-disks'));
 const Partition = require('./partition.js');
@@ -30,28 +32,25 @@ let disk = new mongoose.Schema({
 
 disk.plugin(require('../plugin/standard.js'));
 disk.plugin(require('../plugin/bulk-save.js'));
-// disk.on('init', model => {
-	
-// });
 
 disk.static('findOrPopulate', function findOrPopulate() {
-	console.verbose(`findOrPopulate: this=${inspect(this)}`);
-	return drives().then(d => drivesDetail(d)).then(details => {
-		console.verbose(`disk.on('init').details=${inspect(details)}`);
-		return Q.all(_.map(_.uniqBy(details, 'mountpoint'), detail =>
-			this.findOrCreate({ mountpoint: detail.mountpoint }, detail)
-			.then(disk => disk./*save*/ bulkSave ())));
-	}).catch(err => {
-		console.error(`disk.on('init').drives: error: ${err.stack||err}`);
-		throw err;
-	});
+	return drives()
+	.tap(drives => console.verbose(`drives=${inspect(drives)}`))
+	.then(drives => drivesDetail(drives)
+		.tap(disks => console.verbose(`drives=${inspect(drives)} disks=${inspect(disks)}`)))
+	.then(disks => Q.all(_.map(_.uniqBy(disks, 'mountpoint'), disk =>
+		this.findOrCreate({ mountpoint: disk.mountpoint }, disk)
+		.then(disk => disk.save /*bulkSave*/() ))))
+	// .catch(err =>
+	.tapError(err =>
+	 console.error(`disk.findOrPopulate: error: ${err.stack||err}`));
 });
 
 disk.static('getDriveForPath', function getDriveForPath(path) {
-	console.log(`getDriveForPath('${path}'): this=${this}`);
-	return this.find().then(disks => {
+	return this.find()
+	.then(disks => {
 		var disk =_.find( _.sortBy( disks, disk => disk.mountpoint.length ), disk => path.startsWith(disk.mountpoint));
-		console.log(`disk=${inspect(disk)} disks=${inspect(disks)}`);
+		console.verbose(`disk=${inspect(disk)} disks=${inspect(disks)}`);
 		return disk;
 	});
 })

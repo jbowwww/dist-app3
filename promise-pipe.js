@@ -1,7 +1,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'verbose' });	// verbose debug log
+const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'log' });	// verbose debug log
 const stream = require('stream');
 const _ = require('lodash');
 const inspect = require('util').inspect;
@@ -51,7 +51,7 @@ var self = {
 		}
 		options = _.defaults(options, defaultOptions);
 
-console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(options, { compact: true })} promiseFunctions[${promiseFunctions.length}]`);
+		console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(options, { compact: true })} promiseFunctions[${promiseFunctions.length}]`);
 
 		/* The way this is set up, a promisePipe is potentially an array with multiple promise-returning func's
 		 * If it is, the func's are chained together in a way that is sort of similar to a thru-stream (i think)
@@ -146,28 +146,6 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 		});
 	},
 
-/*new stream.Writable({
-			objectMode: true,
-			write(data, encoding, callback) {
-				if (threadCount < options.concurrency) {
-					threads.push(data);
-					console.verbose(`write: threadCount=${threadCount}`);
-					callback();
-					var threadIndex = threadCount - 1;
-					threads[threadIndex] = promiseFunctions(data).then(newData => {
-						threads[threadIndex] = null;
-						threadCount--;
-					 // callback(null); //, newData );
-					 --threads;
-				})		// pass newData as 2nd arg if using a thru stream instead of a writeable
-				.catch(err => {
-					options.warnErrors && console.warn(`warning: ${err.stack||err}`);
-					options.emitStreamErrors && this.emit('error', err);//callback(err) : callback();
-				})		// ^ way to disable stream errors is to add a catch() function as one of the promiseFunctions
-				.done();
-			}
-		});*/
-
 	chainPromiseFuncs(...args) {
 		var chain;
 		if (args.length === 1) {
@@ -183,10 +161,6 @@ console.verbose(`promisePipe: sourceStream=${sourceStream} options=${inspect(opt
 		}
 		return data => _.reduce(chain, (chain, current) => chain.then(current), Q(data));
 	},
-
-	// nestPromiseFuncs(promiseFunc, ...nestedPromiseFuncs) {
-	// 	return (promiseFunc(data).then(data2 => (self.chainPromiseFuncs(...nestedPromiseFuncs))(data2)));
-	// },
 
 	conditionalPipe(condition, ...pipe1) {//, pipe2 = null) {
 		return (data => condition(data) ? (self.chainPromiseFuncs(pipe1))(data).catch(() => data).then(() => data) : data);// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
