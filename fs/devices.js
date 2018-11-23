@@ -11,7 +11,7 @@ module.exports = async function getDevices() {
 		const { stdout, stderr } = await exec('lsblk -JO');
 		var devices = JSON.parse(stdout);
 		console.debug(`stdout: ${stdout}\nstderr: ${stderr}`);
-		return devices;
+		return devices.blockdevices;
 	} catch (e) {
 		console.error(`error: ${e.stack||e.message||e}`);
 		process.nextTick(() => { throw e; });

@@ -49,7 +49,7 @@ function getNewStatBasicCountsObject(extra) {
 }
 
 module.exports = function statSchemaPlugin(schema, options) {
-	options = _.defaults(options, { data: {} });
+	options = _.defaults(options, { data: { save: {}, validate: {} } });
 	
 	// console.debug(`statSchemaPlugin(): options=${inspect(options)}, this=${inspect(this)}`);
 	if (schema._stats === undefined) {

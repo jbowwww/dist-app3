@@ -10,24 +10,22 @@ Q.longStackSupport = true;
 const hashFile = require('../../fs/hash.js');
 const mongoose = require('../../mongoose.js');
 // const getDevices = require('../../fs/devices.js');
-const { drives, drivesDetail } = promisifyMethods(require('nodejs-drives'));
-const Partition = require('./partition.js');
+// const { drives, drivesDetail } = promisifyMethods(require('nodejs-drives'));
+// const Partition = require('./partition.js');
 
 let drive = new mongoose.Schema({
-	// serial: { type: String, required: true },
-	// model: { type: String, required: true },
-	// label: { type: String, required: true },
-	used: { type: String, required: true },
-	available: { type: String, required: true },
-	freePer: { type: String, required: true },
-	usedPer: { type: String, required: true },
-	total: { type: String, required: true },
-	drive: { type: String, required: true },
-	// device: { type: String, required: true },
-	mountpoint: { type: String, required: true, unique: true },
-	// children: [{type: Partition.schema, required: true }]
+	disk: { type: mongoose.SchemaTypes.ObjectId, ref: 'disk' },
+	name: { type: String, required: true },
+	fstype: { type: String, required: true },
+	label: { type: String, required: true, default: '' },
+	uuid: { type: String, required: true, default: '' },
+	parttype: { type: String, required: true, default: '' },
+	partlabel: { type: String, required: true, default: '' },
+	partuuid: { type: String, required: true },
+	size: { type: String, required: true },
 });
 
+drive.plugin(require('../plugin/stat.js'));
 drive.plugin(require('../plugin/standard.js'));
 drive.plugin(require('../plugin/bulk-save.js'));
 // drive.on('init', model => {
