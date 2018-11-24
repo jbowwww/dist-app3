@@ -22,15 +22,34 @@ let drive = new mongoose.Schema({
 	parttype: { type: String, required: true, default: '' },
 	partlabel: { type: String, required: true, default: '' },
 	partuuid: { type: String, required: true },
+	mountpoint: { type: String, required: true },
 	size: { type: String, required: true },
 });
 
 drive.plugin(require('../plugin/stat.js'));
 drive.plugin(require('../plugin/standard.js'));
 drive.plugin(require('../plugin/bulk-save.js'));
-// drive.on('init', model => {
-	
-// });
+
+
+function diskNameFromDrive(diskName) {
+	if (typeof diskName === 'string') {
+		for (var i = diskName.length; i > 0; i--) {
+			if (_.isNumber(diskName[i - 1])) {
+				diskName = diskName.slice(i - 1, 1);
+			}
+		}
+	}
+};
+
+drive.post('construct', function construct(drive) {
+	var model = this;
+	const Disk = mongoose.model('disk');
+	return Disk.findOrCreate({ name: diskNameFromDrive(drive.name) })
+	.then(disk => _.set(drive, 'disk', disk))
+	.then(() => { console.verbose(`[model ${model.modelName}].post('construct'): name='${drive.name}' disk=${drive.disk}`) })
+	.catch(err => { this.constructor._stats.errors.push(err); throw err; });
+});
+
 
 drive.static('findOrPopulate', function findOrPopulate() {
 	return drives()
@@ -49,5 +68,6 @@ drive.static('getDriveForPath', function getDriveForPath(path) {
 		console.log(`drive=${inspect(drive)} drives=${inspect(drives)}`);
 		return drive;
 	});
-})
+});
+
 module.exports = mongoose.model('drive', drive);

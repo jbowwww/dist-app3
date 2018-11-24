@@ -14,7 +14,8 @@ const defaultCatch = err => { console.warn(`promisePipe error${err.promisePipeDa
 const defaultOptions = {
 	catchErrors: defaultCatch,
 	emitStreamErrors: false,
-	concurrency: 4
+	concurrency: 4,
+	dataThru: false
 };
 
 var self = {
@@ -62,6 +63,14 @@ var self = {
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
 		var writeable = self.writeablePromiseStream(options, ...promiseFunctions);
 		var thenable = self.streamPromise(sourceStream.pipe(writeable), { resolveEvent: 'finish' });
+		_.set(writeable, 'promisePipe', function promisePipe(...args) {
+			console.debug(`writeable.promisePipe(): this=${inspect(this)} writeable=${inspect(writeable)} thenable=${inspect(thenable)}`);
+			writeable.options.dataThru = true;
+			return self.promisePipe(
+				typeof args[0] === 'object' ? args.shift() : { },
+				writeable,
+				...args);
+		});
 		return _.mixin(/*self, */thenable, writeable);
 		// var pp = sourceStream.pipe());
 		// if (typeof options.catchErrors === 'function') {
@@ -109,7 +118,7 @@ var self = {
 		promiseFunctions = self.chainPromiseFuncs(_.isArray(promiseFunctions[0]) && _.every(promiseFunctions[0], pf => _.isFunction(pf)) ? promiseFunctions[0] : promiseFunctions);
 		console.debug(`promiseFunctions: ${/*inspect*/(promiseFunctions)}`);
 		
-		return through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
+		return _.set(through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
 
 			writeCount++;
 			threadCount++;
@@ -122,7 +131,7 @@ var self = {
 			console.debug(`through2Concurrent.obj(${inspect(options, {compact:true})}): writeCount=${writeCount} threadCount=${threadCount} data=${inspect(data, { compact:true })}`);
 			
 			promiseFunctions(data)
-			.then(newData => { threadCount--; callback(); })
+			.then(newData => { threadCount--; if (this.options.dataThru) { this.push(newData); } callback(); })
 			.catch(err => {
 				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: data });
 				if (options.catchErrors && typeof options.catchErrors === 'function') {
@@ -143,7 +152,7 @@ var self = {
 				debugThreadInterval = null;
 			}
 			cb();
-		});
+		}), 'options', options);
 	},
 
 	chainPromiseFuncs(...args) {

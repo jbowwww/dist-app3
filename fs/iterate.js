@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'log' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 // const util = require('util');
 const _ = require('lodash');
@@ -9,8 +9,7 @@ const nodePath = require('path');
 const Q = require('q');
 Q.longStackSupport = true;
 
-const fsLstat = Q.denodeify(fs.lstat);
-const fsReaddir = Q.denodeify(fs.readdir);
+const getDevices = require('./devices.js');
 
 const pathDepth = require('./path-depth.js');
 
@@ -20,9 +19,17 @@ module.exports = /* fs.iterate
 // options.filter: can be a function that takes a path and returns boolean, or a regex
 // pipeStream (optional): a writeable stream that the fs.iterate readable stream will pipe too, except fs.iterate will still return its own readable unlike
 */
-function iterate(options) {
+function /*async*/ iterate(options) {
 	options = _.assign({ path: '.', queueMethod: 'shift', filter: undefined, maxDepth: 1, removePathPrefix: undefined, objectMode: true, highWaterMark: 8 }, options);
 	var path = nodePath.resolve(options.path);
+	var disk;
+	getDevices().then(disks => {
+  		disk = _.find(_.sortBy(_.filter(disks,
+	  			disk => typeof disk.mountpoint === 'string'),
+	  		disk => disk.mountpoint.length ),
+	  	disk => path.startsWith(disk.mountpoint));
+	  	console.verbose(`iterate('${path}'): disk=${inspect(disk)}`);
+  	});
   	console.verbose(`iterate('${path}', ${inspect(options)})`);
 	var self = _.extend({
 		root: path,
@@ -50,9 +57,12 @@ function iterate(options) {
 				try {
 					fs.lstat(path, (err, stats) => {
 						if (err) return nextHandleError(err);
+						var dirPath = nodePath.dirname(path);
 						var item = {
 							path: options.removePathPrefix && path.startsWith(options.removePathPrefix) ? path.substring(options.removePathPrefix.length) : path,
 							stats,
+							dir: { path: dirPath, stats: fs.lstatSync(dirPath) },
+							disk,
 							fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'
 						};
 						if (!stats.isDirectory()) return self.push(item);

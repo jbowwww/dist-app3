@@ -67,20 +67,27 @@ var fsEntry = new mongoose.Schema({
 	discriminatorKey: 'fileType'
 });
 
-fsEntry.post('construct', function construct() {
+fsEntry.plugin(timestampPlugin);
+fsEntry.plugin(standardPlugin);
+fsEntry.plugin(bulkSavePlugin);
+fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
+
+fsEntry.post('construct', function construct(fs) {
 	var model = this.constructor;
 	const Dir = mongoose.model('dir');//.discriminator('dir');//n.constructor;
-	const Disk = mongoose.model('disk');
+	const Drive = mongoose.model('disk');
 	return Q.all([
-		Dir.findOne({ path: this.path.substr(0, this.path.lastIndexOf(pathSep)) }).then(dir => {
-			this.dir = dir;
-			console.verbose(`[model ${model.modelName}].post('construct'): this=${inspect(this)}`);
-		}),
-		Disk.find({ /*mountpoint: { $exists: 1 }*/ }).then(disks => {
-			this.disk = _.find( _.sortBy( disks, disk => disk.mountpoint.length ), disk => this.path.startsWith(disk.mountpoint) );
-			console.verbose(`[model ${model.modelName}].post('construct')2: this=${inspect(this)}`);
-			// console.debug(`fsEntry.path.set('${val}'): \n\n\t\n\tdisks=${inspect(disks)}\n\n\t\n\tdisk=${inspect(/*this.*/disk)}\n\n\t\n\tthis=${inspect(this)}`);
-		})
+		// Dir.findOne({ path: this.path.substr(0, this.path.lastIndexOf(pathSep)) }).then(dir => {
+		// 	this.dir = dir;
+		// 	console.verbose(`[model ${model.modelName}].post('construct'): this=${inspect(this)}`);
+		// }),
+		Dir.findOrCreate({ path: fs.dir.path }).then(dir => _.set(fs, 'dir', dir)),
+		// Disk.find({ /*mountpoint: { $exists: 1 }*/ }).then(disks => {
+		// 	this.disk = _.find( _.sortBy( disks, disk => disk.mountpoint.length ), disk => this.path.startsWith(disk.mountpoint) );
+		// 	console.verbose(`[model ${model.modelName}].post('construct')2: this=${inspect(this)}`);
+		// 	// console.debug(`fsEntry.path.set('${val}'): \n\n\t\n\tdisks=${inspect(disks)}\n\n\t\n\tdisk=${inspect(/*this.*/disk)}\n\n\t\n\tthis=${inspect(this)}`);
+		// })
+		Drive.findOrCreate({ path: fs.drive.mountpoint }).then(drive => _.set(fs, 'drive', drive))
 		// 181115: TODO: This query not working 
 		// Disk.aggregate([
 		// 	{ $addFields: { pathStart: { $substrCP: [ this.path, 0, { $strLenCP: "$mountpoint" } ] } } },
@@ -91,18 +98,13 @@ fsEntry.post('construct', function construct() {
 		// 	this.disk = disk && disk.length ? disk[0] : null;
 		// 	console.verbose(`fsEntry.post('construct')2: this=${inspect(this)}`);
 		// })
-	]).then(() => { console.verbose(`[model ${model.modelName}].post('construct'): path='${this}' dir=${this.dir} disk=${this.disk}`) })
-	.catch(err => { this.constructor._stats.errors.push(err); throw err; });
+	]).then(() => { console.verbose(`[model ${model.modelName}].post('construct'): path='${fs}' dir=${fs.dir} disk=${fs.disk}`) })
+	.catch(err => { model._stats.errors.push(err); throw err; });
 });
 
 fsEntry.method('hasFileChanged', function() {
 	return this.hasUpdatedSince(this.stats.mtime);	// timestampPlugin method
 });
-
-fsEntry.plugin(timestampPlugin);
-fsEntry.plugin(standardPlugin);
-fsEntry.plugin(bulkSavePlugin);
-fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
 
 module.exports = mongoose.model('fs', fsEntry);
 

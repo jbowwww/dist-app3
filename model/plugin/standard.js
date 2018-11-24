@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -59,18 +59,18 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	schema.pre('construct', function(next) {
 		var model = this;
-		console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
+		console.verbose(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
 		return next();
 	});
 	schema.post('construct', function(doc, next) {
 		var model = this;
-		console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
+		console.verbose(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
 		return next();
 	});
 	schema.post('construct', function(err, doc, next) {
-		var model = this.constructor;
-		console.error(`stat: [model ${model.modelName}].post('construct') error: id=${this && this._id ? this._id.toString() : '(null)'}: ${err.stack||err}`);
-		this.constructor._stats.errors.push(err);
+		var model = this;//.constructor;
+		console.error(`stat: [model ${model.modelName}].post('construct') error: id=${doc && doc._id ? doc._id.toString() : '(null)'}: ${err.stack||err}`);
+		model._stats.errors.push(err);
 		return next(err);
 	});
 

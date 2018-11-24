@@ -10,20 +10,20 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const util = require('util');
 const _ = require('lodash');
 const mongoose = require('./mongoose.js');
 const Q = require('q');
 
-const fsIterate = require('./fs/iterate.js');
 const hashFile = require('./fs/hash.js');
 
-const Disk = require('./model/filesys/disk.js');
-const FsEntry = require('./model/filesys/filesys-entry.js');
-const File = require('./model/filesys/file.js');
-const Dir = require('./model/filesys/dir.js');
+const FileSys = require('./model/filesys');
+const { Disk, FsEntry, File, Dir } = FileSys;
+// const FsEntry = require('./model/filesys/filesys-entry.js');
+// const File = require('./model/filesys/file.js');
+// const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
 const Artefact = require('./Artefact.js');
 
@@ -39,17 +39,15 @@ var searches = [
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
-.then(() => Disk.findOrPopulate())												//Process filesystem(s)
-.then(() => Q.all(_.map(searches, search =>	Disk.getDriveForPath(search.path)	// Find the disk the search path refers to
-	.tap(disk => console.verbose(`disk=${inspect(disk)}`))
-	.then(disk => promisePipe({ concurrency: 8 }, fsIterate(search),			// Iterate the filesystem , populating the disk field on fsEntry dsocuments
-		fs => Artefact(FsEntry.findOrCreate({ path: fs.path }, _.set(fs, 'disk', disk))),
+// .then(() => Disk.findOrPopulate())												//Process filesystem(s)
+.then(() => Q.all(_.map(searches, search =>	FileSys.iterate(search).promisePipe(
+		tap(a => console.verbose(`a: ${inspect(a)}`)),
 		ifPipe(a => a.file,
 			ifPipe(a => !a.file.isCheckedSince(a.file.stats.mtime), a => a.file.doHash()),
 			ifPipe(a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio, a => a.addMetaData('audio', {})),
 			ifPipe( a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime), a => a.audio.loadMetadata(a.file))),
 		a => a.bulkSave() )
-		.catch(err => { console.warn(`fsIterate: ${err.stack||err}`); }) ))))
+		.catch(err => { console.warn(`fsIterate: ${err.stack||err}`); }) )))
 
 .catch(err => { console.error(`error: ${err.stack||err}`); })
 .delay(1500).finally(() => mongoose.connection.close()
