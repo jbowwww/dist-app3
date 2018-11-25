@@ -4,7 +4,7 @@ const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'log' });	/
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 // const util = require('util');
 const _ = require('lodash');
-const fs = require('fs');
+const nodeFs = require('fs');
 const nodePath = require('path');
 const Q = require('q');
 Q.longStackSupport = true;
@@ -22,7 +22,7 @@ module.exports = /* fs.iterate
 function /*async*/ iterate(options) {
 	options = _.assign({ path: '.', queueMethod: 'shift', filter: undefined, maxDepth: 1, removePathPrefix: undefined, objectMode: true, highWaterMark: 8 }, options);
 	var path = nodePath.resolve(options.path);
-	var disk;
+	var drive;
 	getDevices().then(drives => {
   		drive = _.find(_.sortBy(_.filter(drives,
 	  			drive => typeof drive.mountpoint === 'string'),
@@ -31,10 +31,11 @@ function /*async*/ iterate(options) {
 	  	console.verbose(`iterate('${path}'): drive=${inspect(drive)}`);
   	});
   	console.verbose(`iterate('${path}', ${inspect(options)})`);
+  	var dirName = nodePath.dirname(path);
 	var self = _.extend({
 		root: path,
 		rootDepth: pathDepth(path),
-		paths: [path],
+		paths: [{ path, dir: { path: dirName, stats: nodeFs.lstatSync(dirName) } }],
 		errors: []
 	}, new require('stream').Readable({
 		objectMode: true,
@@ -55,19 +56,19 @@ function /*async*/ iterate(options) {
 				}
 				var item = self.paths[options.queueMethod]();
 				try {
-					fs.lstat(path, (err, stats) => {
+					nodeFs.lstat(item.path, (err, stats) => {
 						if (err) return nextHandleError(err);
 						item.stats = stats;
-						item.drive = drive;
+						// item.drive = drive;
 						item.fileType = stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown';
 						if (!stats.isDirectory()) return self.push(item);
 						var currentDepth = pathDepth(item.path) - self.rootDepth + 1;	// +1 because below here next files are read from this dir
 						if (((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {
-							fs.readdir(path, (err, names) => {
+							nodeFs.readdir(item.path, (err, names) => {
 								if (err) return nextHandleError(err);
 								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 								console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
-								_.forEach(names, name => self.paths.push({ path: nodePath.join(path, name), dir: item }));
+								_.forEach(names, name => self.paths.push({ path: nodePath.join(item.path, name), dir: item, drive }));
 								return self.push(item);
 							});
 						} else {

@@ -51,17 +51,39 @@ fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
 fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
 
-fsEntry.post('construct', function construct(fs) {
-	var model = this.constructor;
+fsEntry.post('construct', async function construct(fs) {
+	var model = this;
 	const Dir = mongoose.model('dir');
 	const Drive = mongoose.model('drive');
 	const dirPath = fs.dir ? fs.dir.path : nodePath.dirname(fs.path);
-	return Dir.findOrCreate({ path: dirPath }, fs.dir || { path: dirPath, stats: nodeFs.lstatSync(dirPath) })
-	.tap(dir => _.set(fs, 'dir', dir))
-	.tap(dir => Drive.findOrCreate({ mountpoint: fs.drive.mountpoint }, fs.drive)
-	.tap(drive => _.set(fs, 'drive', drive))
-	.tap(drive => console.verbose(`[model ${model.modelName}].post('construct'): path='${fs}' dir=${fs.dir} drive=${fs.drive}`)))
-	.catch(err => { model._stats.errors.push(err); throw err; });
+	console.verbose(`[model ${model.modelName}].post('construct'): path='${inspect(fs)}' dirPath=${dirPath}`);
+
+	try {
+		if (dirPath === fs.path) {
+			fs.dir = null;
+		} else if (!(fs.dir instanceof mongoose.Document)) {
+			await Dir.findOrCreate({ path: dirPath }, fs.dir || { path: dirPath, stats: nodeFs.lstatSync(dirPath) }, { saveImmediate: true })
+			.tap(dir => fs.dir = dir)//_.set(fs, 'dir', dir))
+			// .tap(dir => dir.save());
+		}
+		if (!fs.drive) {
+			await Drive.find({}).then(drives => {
+				fs.drive = /*_.set*/(/*fs, 'drive',*/ _.find(_.reverse(_.sortBy(_.filter(drives,
+							drive => drive.mountpoint),
+						drive => drive.mountpoint.length)),
+					drive => fs.path.startsWith(drive.mountpoint)));
+			});
+		} else if (!(fs.drive instanceof mongoose.Document)) {
+			await Drive.findOrCreate({ mountpoint: fs.drive.mountpoint }, fs.drive, { saveImmediate: true })
+			.tap(drive => fs.drive = drive)// _.set(fs, 'drive', drive))
+			// .tap(drive => drive.save());
+		}
+		console.verbose(`[model ${model.modelName}].post('construct'): path='${fs}' dir=${fs.dir} drive=${fs.drive}`)
+	} catch(err) {
+		model._stats.errors.push(err);
+		console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);
+		throw err;
+	}
 });
 
 fsEntry.method('hasFileChanged', function() {
@@ -70,4 +92,4 @@ fsEntry.method('hasFileChanged', function() {
 
 module.exports = mongoose.model('fs', fsEntry);
 
-console.verbose(`FsEntry: ${inspect(module.exports)}, FsEntry.prototype: ${inspect(module.exports.prototype)}, FsEntry.schema.childSchemas=${inspect(module.exports.schema.childSchemas, { depth: 2 })}	`);	//fsEntry: ${inspect(fsEntry)}, 
+console.debug(`FsEntry: ${inspect(module.exports)}, FsEntry.prototype: ${inspect(module.exports.prototype)}, FsEntry.schema.childSchemas=${inspect(module.exports.schema.childSchemas, { depth: 2 })}	`);	//fsEntry: ${inspect(fsEntry)}, 

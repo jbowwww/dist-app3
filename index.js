@@ -18,6 +18,7 @@ const mongoose = require('./mongoose.js');
 const Q = require('q');
 
 const hashFile = require('./fs/hash.js');
+const fsIterate = require('./fs/iterate.js');
 
 const FileSys = require('./model/filesys');
 const { Disk, FsEntry, File, Dir } = FileSys;
@@ -33,14 +34,22 @@ const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs
 var tap = function(fn) { return (v => { fn(v); return v; }); };
 
 var searches = [
-	{ path: '/home/jk', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) },
-	{ path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
+	{ path: '/home/jk', maxDepth: 2 }
+	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
-// .then(() => Disk.findOrPopulate())												//Process filesystem(s)
-.then(() => Q.all(_.map(searches, search =>	FileSys.iterate(search).promisePipe(
+.then(() => Disk.findOrPopulate())												//Process filesystem(s)
+.then(() => Q.all(_.map(searches, search =>
+	// FileSys.iterate(search).promisePipe(
+promisePipe(
+		{ concurrency: 1 },
+		fsIterate(search),			// Iterate the filesystem , populating the disk field on fsEntry dsocuments
+		// fs => fs.dir ?  Dir.findOrCreate({ path: fs.dir.path }).then(dir => _.set(fs, 'dir', dir)) : fs,
+		// fs => fs.disk ? Disk.findOrCreate({ path: fs.disk.path }).then(disk => _.set(fs, 'disk', disk)) : fs,
+		fs => FsEntry.findOrCreate({ path: fs.path }, fs),
+		fs => Artefact(fs),
 		tap(a => console.verbose(`a: ${inspect(a)}`)),
 		ifPipe(a => a.file,
 			ifPipe(a => !a.file.isCheckedSince(a.file.stats.mtime), a => a.file.doHash()),

@@ -13,7 +13,7 @@ const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js')
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
-	console.verbose(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
 	schema.pre('validate', function(next) {
 		var model = this.constructor;
@@ -59,12 +59,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	schema.pre('construct', function(next) {
 		var model = this;
-		console.verbose(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
+		console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
 		return next();
 	});
 	schema.post('construct', function(doc, next) {
 		var model = this;
-		console.verbose(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
+		console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
 		return next();
 	});
 	schema.post('construct', function(err, doc, next) {
@@ -90,9 +90,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			var fullPath = pathPrefix + propName;
 			var docVal = this.get(fullPath);
 			var schemaType = this.schema.path(fullPath);
-			if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray' ].includes(schemaType.instance))) {
+			if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray', 'ObjectID' ].includes(schemaType.instance))) {
 				console.debug(`updateDocument: ${fullPath}: ${schemaType.instance}`);
-				this.updateDocument(updVal, fullPath + '.');
+				this.updateDocument(schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal && updVal._id ? updVal._id : updVal, fullPath + '.');
 			} else if (!_.isEqual(docVal, updVal)) {
 				console.debug(`updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
 				this.set(fullPath, updVal);
@@ -115,19 +115,48 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * !! Hold on - the use case here for Audio is different to File. Even if a File is found this method still does updateDocument(data),
 	 * whereas with Audio I think I just want to skip it completley - unless the file has changed more recently than the Audio document was updated/checked 
 	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... */
-	schema.static('findOrCreate', function findOrCreate(query, data, cb) {
+	schema.static('findOrCreate', function findOrCreate(query, data, options, cb) {
+		const defaultOptions = {
+			saveImmediate: false		// if true, calls doc.save() immediately after creation or after finding the doc 
+		};
 		if (!_.isPlainObject(query)) {
 			throw new TypeError(`query must be a plain object, but query=${inspect(query)}`);
-		} else if (typeof data === 'function' && !cb) {
+		} else if (typeof data === 'function' && !options && !cb) {
 			cb = data;
 			data = query;
+			options = defaultOptions;
 		} else if (!data) {
 			data = query;
+			options = defaultOptions;
+		} else if (typeof options === 'function') {
+			cb = options;
+			options = defaultOptions;
+		} else if (!options) {
+			options = defaultOptions;
 		}
 		var dk = schema.options.discriminatorKey;
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
-		return Q(model.findOne(query).then(r => r ? r.updateDocument(data) : model.construct(data)/*new (model)(data)*/));	//new (this)(data)));//this.create(data)));
+
+		// var subDocs = [];
+		// model.schema.eachPath((path, schemaType) => {
+		// 	if (schemaType.options.ref && schemaType instanceof mongoose.SchemaTypes.ObjectId) {
+		// 		if (!(data[path] instanceof mongoose.Document) && !Object.hasOwnProperty(data, '_id')) {
+		// 			subDocs.push(
+		// 				mongoose.model(schemaType.options.ref).findOrCreate(data[path])
+		// 				.then(subDoc => data[path] = subDoc._id)
+		// 			);
+
+		// 	console.log(`findOrCreate: eachPath: subDoc: path='${path}' schemaType=${schemaType.instance} data=${inspect(data[path])}`);
+		// 		}
+		// 	}
+		// 	console.log(`findOrCreate: eachPath: path='${path}' schemaType=${inspect(schemaType)}`);
+		// });
+		// return Q.all(subDocs)
+		
+		return Q(model.findOne(query)).then(r => r ?
+			r.updateDocument(data).then(doc => options.saveImmediate ? doc.save() : doc)
+		 : 	model.construct(data).then(doc => options.saveImmediate ? doc.save() : doc));
 	});
 
 	// Artefact related
@@ -183,7 +212,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 					maxBatchSize: 10,
 					batchTimeout: 750
 				}, opts);
-				console.verbose(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
+				console.debug(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
 				return Q.all(
 					_.map(this, (data, dataName) => data.bulkSave(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts))
 				)

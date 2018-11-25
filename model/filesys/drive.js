@@ -17,12 +17,12 @@ let drive = new mongoose.Schema({
 	disk: { type: mongoose.SchemaTypes.ObjectId, ref: 'disk' },
 	name: { type: String, required: true },
 	fstype: { type: String, required: true },
-	label: { type: String, required: true, default: '' },
+	label: { type: String, required: false, default: '' },
 	uuid: { type: String, required: true, default: '' },
 	parttype: { type: String, required: true, default: '' },
-	partlabel: { type: String, required: true, default: '' },
-	partuuid: { type: String, required: true },
-	mountpoint: { type: String, required: true },
+	partlabel: { type: String, required: false, default: '' },
+	partuuid: { type: String, required: false },
+	mountpoint: { type: String, required: false },
 	size: { type: String, required: true },
 });
 
@@ -44,7 +44,9 @@ function diskNameFromDrive(diskName) {
 drive.post('construct', function construct(drive) {
 	var model = this;
 	const Disk = mongoose.model('disk');
-	return Disk.findOrCreate({ name: diskNameFromDrive(drive.name) }).then(disk => _.set(drive, 'disk', disk))
+	return Q(drive.disk instanceof mongoose.Document ? null
+	 : 	Disk.findOrCreate({ name: diskNameFromDrive(drive.name) })
+		.then(disk => _.set(drive, 'disk', disk)))
 	.then(() => { console.verbose(`[model ${model.modelName}].post('construct'): name='${drive.name}' disk=${drive.disk}`) })
 	.catch(err => { this.constructor._stats.errors.push(err); throw err; });
 });
