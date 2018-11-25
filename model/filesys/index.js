@@ -19,8 +19,8 @@ module.exports.iterate = function fsIterate(options) {
 	return promisePipe(
 		{ concurrency: 8 },
 		rawFsIterate(options),			// Iterate the filesystem , populating the disk field on fsEntry dsocuments
-		fs => fs.dir ?  Dir.findOrCreate({ path: fs.dir.path }).then(dir => _.set(fs, 'dir', dir)) : fs,
-		fs => fs.disk ? Disk.findOrCreate({ path: fs.disk.path }).then(disk => _.set(fs, 'disk', disk)) : fs,
+		// fs => fs.dir ?  Dir.findOrCreate({ path: fs.dir.path }).then(dir => _.set(fs, 'dir', dir)) : fs,
+		// fs => fs.disk ? Disk.findOrCreate({ path: fs.disk.path }).then(disk => _.set(fs, 'disk', disk)) : fs,
 		fs => FsEntry.findOrCreate({ path: fs.path }, fs),
 		fs => Artefact(fs));
 };

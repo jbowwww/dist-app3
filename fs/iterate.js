@@ -23,12 +23,12 @@ function /*async*/ iterate(options) {
 	options = _.assign({ path: '.', queueMethod: 'shift', filter: undefined, maxDepth: 1, removePathPrefix: undefined, objectMode: true, highWaterMark: 8 }, options);
 	var path = nodePath.resolve(options.path);
 	var disk;
-	getDevices().then(disks => {
-  		disk = _.find(_.sortBy(_.filter(disks,
-	  			disk => typeof disk.mountpoint === 'string'),
-	  		disk => disk.mountpoint.length ),
-	  	disk => path.startsWith(disk.mountpoint));
-	  	console.verbose(`iterate('${path}'): disk=${inspect(disk)}`);
+	getDevices().then(drives => {
+  		drive = _.find(_.sortBy(_.filter(drives,
+	  			drive => typeof drive.mountpoint === 'string'),
+	  		drive => drive.mountpoint.length ),
+	  	drive => path.startsWith(drive.mountpoint));
+	  	console.verbose(`iterate('${path}'): drive=${inspect(drive)}`);
   	});
   	console.verbose(`iterate('${path}', ${inspect(options)})`);
 	var self = _.extend({
@@ -53,18 +53,13 @@ function /*async*/ iterate(options) {
 					;
 					return 0;
 				}
-				var path = self.paths[options.queueMethod]();
+				var item = self.paths[options.queueMethod]();
 				try {
 					fs.lstat(path, (err, stats) => {
 						if (err) return nextHandleError(err);
-						var dirPath = nodePath.dirname(path);
-						var item = {
-							path: options.removePathPrefix && path.startsWith(options.removePathPrefix) ? path.substring(options.removePathPrefix.length) : path,
-							stats,
-							dir: { path: dirPath, stats: fs.lstatSync(dirPath) },
-							disk,
-							fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'
-						};
+						item.stats = stats;
+						item.drive = drive;
+						item.fileType = stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown';
 						if (!stats.isDirectory()) return self.push(item);
 						var currentDepth = pathDepth(item.path) - self.rootDepth + 1;	// +1 because below here next files are read from this dir
 						if (((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {
@@ -72,7 +67,7 @@ function /*async*/ iterate(options) {
 								if (err) return nextHandleError(err);
 								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 								console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
-								_.forEach(names, name => self.paths.push(nodePath.join(path, name)));
+								_.forEach(names, name => self.paths.push({ path: nodePath.join(path, name), dir: item }));
 								return self.push(item);
 							});
 						} else {

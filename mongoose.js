@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('./stdio.js').Get('mongoose', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('mongoose', { minLevel: 'log' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 1, breakLength: 0, compact: false });
 const _ = require('lodash');
 
@@ -54,13 +54,13 @@ mongoose.Schema.prototype.static = function mongoose_schema_static(name, fn) {
 	}
 	const schema = this;
 	const schemaHooksExecPost = Q.denodeify(schema.s /*model*/.hooks.execPost.bind(schema.s /*model*/.hooks));
-	return /*schema.static*/mongooseSchemaStatic.call(this, name, function /*[name]*/(...args) {
+	return /*schema.static*/mongooseSchemaStatic.call(schema, name, function /*[name]*/(...args) {
 		const model = this;
 		/*return Q.when(() => */console.verbose(`[model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): execPre`);
 		return /*.then(() =>*/ Q.denodeify(schema.s /*model*/.hooks.execPre.bind(schema.s.hooks))( /*model*/ name, model, args)
 			.then(() => Q(fn.apply(model, args)))
-			.tap(result => { console.verbose(`[model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): successful execPost: result=${inspect(result)}`); })
 			.tap(result => schemaHooksExecPost(name, model, [ result ], { error: undefined }))
+			.tap(result => { console.verbose(`[model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): successful execPost: result=${inspect(result)}`); })
 			.catch(e =>
 				Q.when(() => console.warn(`[model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${e.stack||err}`))
 				.tap(() => { schemaHooksExecPost(name, model, [ null ], { error: e }); throw e; }));//.reject(e)));

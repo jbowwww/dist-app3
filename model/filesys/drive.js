@@ -44,8 +44,7 @@ function diskNameFromDrive(diskName) {
 drive.post('construct', function construct(drive) {
 	var model = this;
 	const Disk = mongoose.model('disk');
-	return Disk.findOrCreate({ name: diskNameFromDrive(drive.name) })
-	.then(disk => _.set(drive, 'disk', disk))
+	return Disk.findOrCreate({ name: diskNameFromDrive(drive.name) }).then(disk => _.set(drive, 'disk', disk))
 	.then(() => { console.verbose(`[model ${model.modelName}].post('construct'): name='${drive.name}' disk=${drive.disk}`) })
 	.catch(err => { this.constructor._stats.errors.push(err); throw err; });
 });
