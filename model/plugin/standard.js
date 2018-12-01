@@ -83,6 +83,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * I think mongoose is supposed to be able to doc.set() and only mark paths and subpaths that have actually changed, 
 	 * but it hasn't wqorked for me in the past, so i wrote my own. */
 	schema.method('updateDocument', function(update, pathPrefix = '') {
+		var model = this.constructor;
 		if (pathPrefix !== '' && !pathPrefix.endsWith('.')) {
 			pathPrefix += '.';
 		}
@@ -91,13 +92,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			var docVal = this.get(fullPath);
 			var schemaType = this.schema.path(fullPath);
 			if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray', 'ObjectID' ].includes(schemaType.instance))) {
-				console.debug(`updateDocument: ${fullPath}: ${schemaType.instance}`);
-				this.updateDocument(schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal && updVal._id ? updVal._id : updVal, fullPath + '.');
+				console.verbose(`[model ${model.modelName}].updateDocument: ${fullPath}: ${schemaType.instance}`);
+				this.updateDocument(/*schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal && updVal._id ? updVal._id :*/ updVal, fullPath + '.');
 			} else if (!_.isEqual(docVal, updVal)) {
-				console.debug(`updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
+				console.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
 				this.set(fullPath, updVal);
 			} else {
-				console.debug(`updateDocument:${fullPath}: No update to ${docVal}`);
+				console.debug(`[model ${model.modelName}].updateDocument:${fullPath}: No update to ${docVal}`);
 			}
 		});
 		return Q(this);
