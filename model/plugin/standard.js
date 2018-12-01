@@ -1,12 +1,10 @@
 "use strict";
 const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
-const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-// mongoose.Promise = Q.Promise;
 const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
 
 /* Standard/common schema methods, statics
@@ -182,8 +180,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.method('getArtefact', function getArtefact(options = {}) {
 		
 		var doc = this;
+		var dk = schema.options.discriminatorKey;
 		var docModel = this.constructor;
-		var docModelName = docModel.modelName;
+		var docModelName = doc[dk] || docModel.modelName;//docModel.discriminators[doc[dk]] && doc.constructor.discriminators[doc[dk]] ? doc.constructor.discriminators[doc[dk]] : doc.constructor;
+		// TODO: 181201: Do you want the model name being the discriminator value? or aybe the baseModleName + '.' or ':' + discrim value (e.g. "file" and "dir" or "fs.file" and "fs.,dir" - may become necessary or desirable if typenames are likely to collide)
 
 		doc._primary = doc;
 		doc._primaryType = docModelName;
@@ -266,10 +266,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			// _primaryDataId: doc._id,
 			[docModelName]: { writeable: true, enumerable: true, value: doc }
 		});
-
 		doc._artefact = a;
 
-		var allModels = options.meta ? _.keys(options.meta) : mongoose.modelNames();
+		var allModels = options.meta ? _.keys(options.meta) : _.filter(mongoose.modelNames(), modelName => mongoose.model(modelName).discriminators === undefined);
+		
 		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
 		.then(() => { console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
 		.then(() => Q(a));
