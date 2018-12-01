@@ -6,7 +6,7 @@ const hashFile = require('../../fs/hash.js');
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
-const mongoose = require('../../mongoose.js');
+const mongoose = require('mongoose');
 const FsEntry = require('./filesys-entry.js');
 
 let file = new mongoose.Schema({

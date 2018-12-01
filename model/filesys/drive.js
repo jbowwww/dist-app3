@@ -6,30 +6,27 @@ const { promisifyMethods } = require('../../utility.js');
 const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
-Q.longStackSupport = true;
 const hashFile = require('../../fs/hash.js');
-const mongoose = require('../../mongoose.js');
-// const getDevices = require('../../fs/devices.js');
-// const { drives, drivesDetail } = promisifyMethods(require('nodejs-drives'));
-// const Partition = require('./partition.js');
+const mongoose = require('mongoose');
 
 let drive = new mongoose.Schema({
-	disk: { type: mongoose.SchemaTypes.ObjectId, ref: 'disk' },
-	name: { type: String, required: true },
-	fstype: { type: String, required: true },
-	label: { type: String, required: false, default: '' },
-	uuid: { type: String, required: true, default: '' },
-	parttype: { type: String, required: true, default: '' },
-	partlabel: { type: String, required: false, default: '' },
-	partuuid: { type: String, required: false },
-	mountpoint: { type: String, required: false },
-	size: { type: String, required: true },
+	disk: { type: mongoose.SchemaTypes.ObjectId, ref: 'disk', required: true },				// the disk containing this drive/partition
+	container: { type: mongoose.SchemaTypes.ObjectId, ref: 'drive', required: false },		// container partition (e.g. LVM)
+	name: { type: String, required: true },													// partition name
+	fstype: { type: String, required: true },												// filesystem type
+	label: { type: String, required: false, default: '' },									// filesystem label
+	uuid: { type: String, required: true, default: '' },									// filesystem(?) uuid
+	parttype: { type: String, required: false, default: '' },								// partition type
+	partlabel: { type: String, required: false, default: '' },								// partition label
+	partuuid: { type: String, required: false },											// partition UUID
+	mountpoint: { type: String, required: false },											// parttion mountpoint
+	size: { type: String, required: true },													// partition size
 });
 
 drive.plugin(require('../plugin/stat.js'));
 drive.plugin(require('../plugin/standard.js'));
+drive.plugin(require('../plugin/custom-hooks.js'));
 drive.plugin(require('../plugin/bulk-save.js'));
-
 
 function diskNameFromDrive(diskName) {
 	if (typeof diskName === 'string') {
@@ -59,12 +56,11 @@ drive.static('findOrPopulate', function findOrPopulate() {
 		.then(disks => Q.all(_.map(_.uniqBy(disks, 'mountpoint'), disk =>
 			this.findOrCreate({ mountpoint: disk.mountpoint }, disk)
 			.then(disk => disk./*save*/ bulkSave() )))))
-	.tapError(err => console.error(`drive.on('init').drives: error: ${err.stack||err}`));
+	.catch(err => { console.error(`drive.on('init').drives: error: ${err.stack||err}`); throw err; });
 });
 
 drive.static('getDriveForPath', function getDriveForPath(path) {
-	return this.find()
-	.then(drives => {
+	return this.find().then(drives => {
 		var drive =_.find( _.sortBy( drives, drive => drive.mountpoint.length ), drive => path.startsWith(drive.mountpoint));
 		console.log(`drive=${inspect(drive)} drives=${inspect(drives)}`);
 		return drive;

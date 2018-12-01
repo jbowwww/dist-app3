@@ -35,7 +35,7 @@ function /*async*/ iterate(options) {
 	var self = _.extend({
 		root: path,
 		rootDepth: pathDepth(path),
-		paths: [{ path, dir: { path: dirName, stats: nodeFs.lstatSync(dirName) } }],
+		paths: [{ path/*, dir: { path: dirName, stats: nodeFs.lstatSync(dirName) }*/ }],
 		errors: []
 	}, new require('stream').Readable({
 		objectMode: true,
@@ -68,7 +68,7 @@ function /*async*/ iterate(options) {
 								if (err) return nextHandleError(err);
 								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 								console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
-								_.forEach(names, name => self.paths.push({ path: nodePath.join(item.path, name), dir: item, drive }));
+								_.forEach(names, name => self.paths.push({ path: nodePath.join(item.path, name)/*, dir: item, drive*/ }));
 								return self.push(item);
 							});
 						} else {

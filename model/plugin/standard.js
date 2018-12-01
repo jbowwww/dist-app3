@@ -6,6 +6,7 @@ const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
 const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
+const statPlugin = require('./stat.js');
 
 /* Standard/common schema methods, statics
  */
@@ -13,6 +14,20 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
+	schema.plugin(statPlugin, {
+		data: {
+			save: {},
+			validate: {},
+			bulkSave: {}
+			// 	items: {
+			// 		insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
+			// 		get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
+			// 		// toString() { return util.inspect(this, { compact: true }); }
+			// 	}
+			// }
+		}
+	});
+
 	schema.pre('validate', function(next) {
 		var model = this.constructor;
 		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
@@ -73,7 +88,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 
 	schema.static('construct', function construct(data, cb) {
-		return	new (this)(data);
+		return Q(new (this)(data));
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
@@ -282,4 +297,5 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		}
 		return !this.isNew && this._ts.checkedAt > timestamp;
 	});
+
 };

@@ -7,9 +7,8 @@
 const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
-const mongoose = require('./mongoose.js');
 const Q = require('q');
-
+const mongoose = require('mongoose');
 const hashFile = require('./fs/hash.js');
 const fsIterate = require('./fs/iterate.js');
 

@@ -2,13 +2,10 @@
 var console = require('../stdio.js').Get('modules/audio', { minLevel: 'verbose' });	// debug verbose
 const inspect =	require('../utility.js').makeInspect({ depth: 1, compact: true });
 const inspectPretty = require('../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
-// const baseFs = require('../fs.js');
 const _ = require('lodash');
 const Q = require('q');
-const mongoose = require('../mongoose.js');
-// const moment = require('moment');
+const mongoose = require('mongoose');
 const mm = require('music-metadata');
-// const app = require('../app.js');
 
 var formatSchema = new mongoose.Schema({
     tagTypes: [String],

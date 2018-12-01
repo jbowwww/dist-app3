@@ -5,12 +5,9 @@ const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compac
 const { promisifyMethods } = require('../../utility.js');
 const util = require('util');
 const _ = require('lodash');
-// const Q = require('../../q.js');
 const hashFile = require('../../fs/hash.js');
-const mongoose = require('../../mongoose.js');
-const Q = mongoose.Promise;
-// console.verbose(`Q.Promise: ${inspect(Q.Promise)}`);
-
+const mongoose = require('mongoose');
+const Q = require('q');
 const getDevices = require('../../fs/devices.js');
 // const { drives, drivesDetail } = promisifyMethods(require('nodejs-disks'));
 const Drive = require('./drive.js');
@@ -37,7 +34,8 @@ disk.static('findOrPopulate', async function findOrPopulate() {
 		return await Q.all(_.map(disks, disk =>
 			this.findOrCreate({ name: disk.name, vendor: disk.vendor, model: disk.model, serial: disk.serial }, disk, { saveImmediate: true })
 			.tap(diskDoc => console.verbose(`diskDoc=${inspect(diskDoc)}`))
-			.tap(diskDoc => Q.all(_.map(disk.children, drive =>
+			.tap(diskDoc => Q.all((function mapDrives(container) {
+				return !container ? [] : _.map(container.children, drive =>
 				Drive.findOrCreate(/*drive*/{
 					name: drive.name,
 					uuid: drive.uuid,
@@ -47,11 +45,11 @@ disk.static('findOrPopulate', async function findOrPopulate() {
 					// serial: drive.serial,
 					// parttype: drive.parttype
 				}, _.set(drive, 'disk', diskDoc), { saveImmediate: true })
-				.tap(driveDoc => console.verbose(`diskDoc=${inspect(diskDoc)} driveDoc=${inspect(driveDoc)}`)))))
-				// .tap(drive => drive.save()))))
-			// .tap(d => d.save())
-				// .tap(() => console.verbose(`disk=${inspect(d)}`))
-			));
+				.tap(driveDoc => console.verbose(`diskDoc=${inspect(diskDoc)} driveDoc=${inspect(driveDoc)}`))
+				.then(() => Q.all(mapDrives(drive)))
+				);
+			})(disk)))
+		));
 	} catch (e) {
 		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
 		throw e;

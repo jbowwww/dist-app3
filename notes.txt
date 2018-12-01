@@ -1,4 +1,14 @@
 
+181201
+Some notes / thoughts on plan / roadmap / mudmap
+
+- Plugins could do with rationalising / condensing / reorganising (e.g. i think stat should be in standard, not sure about bulk save??)
+
+- custom-hooks.js plugin works well, and using post('construct') seems quite useful for populating fields
+	- Issue with concurrency - same Dir can be created >once because multiple files exist in it/reference it by findOrCreate, causing index exception on the unique path field
+	- Ultimately, populating the dir/disk/etc fields of fs/file/dir and disk in drive, could possibly get a little messy, in the case where file system entries get moved and their containing directories/disk/etc change or otherwise become inaccurate.
+		- Instead of trying to maintain these references, why not make those fields virtual on the schema, and populate them on find/create/whatever? e.g. containing directory of a file or dir can be populated by matching dir.path == nodeFs.dirname(fs.path), fs.drive can be populated by fs.path.startsWith(drive.mountpoint) (must either retrieve entire drive collection) and sort by length, or could try using a drive.find({$where:...}) query
+
 181021
 Some notes on mongoose middleware
 

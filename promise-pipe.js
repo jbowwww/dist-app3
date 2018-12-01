@@ -5,7 +5,6 @@ const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'lo
 const stream = require('stream');
 const _ = require('lodash');
 const inspect = require('util').inspect;
-const mongoose = require('./mongoose.js');
 const Q = require('q');
 const pEvent = require('p-event');
 const through2Concurrent = require('through2-concurrent');

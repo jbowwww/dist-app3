@@ -13,6 +13,7 @@ const timestampPlugin = require('../plugin/timestamp.js');
 const statPlugin = require('../plugin/stat.js');
 const bulkSavePlugin = require('../plugin/bulk-save.js');
 const standardPlugin = require('../plugin/standard.js');
+const customHooksPlugin = require('../plugin/custom-hooks.js');
 
 var statSchema = new mongoose.Schema({
 	"dev" : Number,
@@ -46,6 +47,8 @@ var fsEntry = new mongoose.Schema({
 	discriminatorKey: 'fileType'
 });
 
+
+fsEntry.plugin(customHooksPlugin);
 fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
@@ -63,21 +66,25 @@ fsEntry.post('construct', async function construct(fs) {
 			fs.dir = null;
 		} else if (!(fs.dir instanceof mongoose.Document)) {
 			await Dir.findOrCreate({ path: dirPath }, fs.dir || { path: dirPath, stats: nodeFs.lstatSync(dirPath) }, { saveImmediate: true })
-			.tap(dir => fs.dir = dir)//_.set(fs, 'dir', dir))
+			.tap(dir => fs.dir = dir._id)//_.set(fs, 'dir', dir))
 			// .tap(dir => dir.save());
 		}
 		if (!fs.drive) {
 			await Drive.find({}).then(drives => {
-				fs.drive = /*_.set*/(/*fs, 'drive',*/ _.find(_.reverse(_.sortBy(_.filter(drives,
+				var searchDrives =_.reverse(_.sortBy(_.filter(drives,
 							drive => drive.mountpoint),
-						drive => drive.mountpoint.length)),
-					drive => fs.path.startsWith(drive.mountpoint)));
+						drive => drive.mountpoint.length));	
+				var drive = /*_.set*/(/*fs, 'drive',*/ _.find(searchDrives, drive => fs.path.startsWith(drive.mountpoint)));
+				if (drive) {
+					fs.drive = drive._id;
+				}
+				console.verbose(`drives=${inspect(drives)} searchDrives=${inspect(searchDrives)} drive=${inspect(drive)} fs.drive=${inspect(fs.drive)}`);
 			});
-		} else if (!(fs.drive instanceof mongoose.Document)) {
+		} /*else if (!(fs.drive instanceof mongoose.Document)) {
 			await Drive.findOrCreate({ mountpoint: fs.drive.mountpoint }, fs.drive, { saveImmediate: true })
-			.tap(drive => fs.drive = drive)// _.set(fs, 'drive', drive))
+			.tap(drive => fs.drive = drive._id)// _.set(fs, 'drive', drive))
 			// .tap(drive => drive.save());
-		}
+		}*/
 		console.verbose(`[model ${model.modelName}].post('construct'): path='${fs}' dir=${fs.dir} drive=${fs.drive}`)
 	} catch(err) {
 		model._stats.errors.push(err);
