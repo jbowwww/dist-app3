@@ -9,8 +9,8 @@ const hashFile = require('../../fs/hash.js');
 const mongoose = require('mongoose');
 const Q = require('q');
 const getDevices = require('../../fs/devices.js');
-// const { drives, drivesDetail } = promisifyMethods(require('nodejs-disks'));
-const Drive = require('./drive.js');
+// const { partitions, partitionsDetail } = promisifyMethods(require('nodejs-disks'));
+const Partition = require('./partition.js');
 
 let disk = new mongoose.Schema({
 	name: { type: String, required: true },
@@ -20,7 +20,7 @@ let disk = new mongoose.Schema({
 	uuid: { type: String, required: false }, //true, default: '' },
 	size: { type: String, required: false }, //true, default: '' },
 	vendor: { type: String, required: false }, //true, default: '' },
-	// children: [{ type: mongoose.SchemaTypes.ObjectId, ref: 'drive' }]
+	// children: [{ type: mongoose.SchemaTypes.ObjectId, ref: 'partition' }]
 });
 
 disk.plugin(require('../plugin/stat.js'));
@@ -34,21 +34,26 @@ disk.static('findOrPopulate', async function findOrPopulate() {
 		return await Q.all(_.map(disks, disk =>
 			this.findOrCreate({ name: disk.name, vendor: disk.vendor, model: disk.model, serial: disk.serial }, disk, { saveImmediate: true })
 			.tap(diskDoc => console.verbose(`diskDoc=${inspect(diskDoc)}`))
-			.tap(diskDoc => Q.all((function mapDrives(container) {
-				return !container ? [] : _.map(container.children, drive =>
-				Drive.findOrCreate(/*drive*/{
-					name: drive.name,
-					uuid: drive.uuid,
-					// label: drive.label,
-					// fstype: drive.fstype,
-					// model: drive.model,
-					// serial: drive.serial,
-					// parttype: drive.parttype
-				}, _.set(drive, 'disk', diskDoc), { saveImmediate: true })
-				.tap(driveDoc => console.verbose(`diskDoc=${inspect(diskDoc)} driveDoc=${inspect(driveDoc)}`))
-				.then(() => Q.all(mapDrives(drive)))
+			.tap(diskDoc => Q.all((function mapPartitions(container, containerPartitionDoc/*Id*/) {
+				return /*!container ? [] :*/ _.map(container.children, partition =>
+				Partition.findOrCreate(/*partition*/{
+					name: partition.name,
+					uuid: partition.uuid,
+					container: containerPartitionDoc/*Id*/ //? containerPartitionId : undefined
+					// label: partition.label,
+					// fstype: partition.fstype,
+					// model: partition.model,
+					// serial: partition.serial,
+					// parttype: partition.parttype
+				}, _.assign(partition, {
+					disk: diskDoc,
+					container: containerPartitionDoc/*Id*/
+				}), { saveImmediate: true })
+				.tap(partitionDoc => console.verbose(`diskDoc=${inspect(diskDoc)} partitionDoc=${inspect(partitionDoc)}`))
+				.then(partitionDoc => Q.all(mapPartitions(partition, partitionDoc/*._id*/)))
 				);
 			})(disk)))
+			// .catch(e => { throw e; })
 		));
 	} catch (e) {
 		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
@@ -56,7 +61,7 @@ disk.static('findOrPopulate', async function findOrPopulate() {
 	}
 });
 
-disk.static('getDriveForPath', function getDriveForPath(path) {
+disk.static('getPartitionForPath', function getPartitionForPath(path) {
 	return this.find()
 	.then(disks => {
 		var disk =_.find(_.sortBy(

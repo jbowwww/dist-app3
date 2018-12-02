@@ -5,13 +5,19 @@ const { promisifyMethods } = require('./utility.js');
 const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
-const hashFile = require('./fs/hash.js');
+const mongoose = require('mongoose');
 // const Q = mongoose.Promise;
 
-const getDevices = require('./fs/devices.js');
-// const { drives, drivesDetail } = promisifyMethods(require('nodejs-disks'));
-// const Partition = require('./partition.js');
+const FileSys = require('./model/filesys');
+// const { Disk, FsEntry, File, Dir } = FileSys;
 
-getDevices().then(devices => {
-	console.log(`devices=${inspectPretty(devices)}`);
-})
+mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
+
+.then(() => mongoose.model('file').find().populate('dir partition').exec((err, docs) => {
+	if (err) {
+		return console.error(`err: ${err.stack||err}`);
+	}
+	console.log(`docs: ${inspectPretty(docs)}`);
+}))
+
+.catch(err => console.error(`err2: ${err.stack||err}`));

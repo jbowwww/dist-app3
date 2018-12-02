@@ -14,7 +14,7 @@ const statPlugin = require('../plugin/stat.js');
 const bulkSavePlugin = require('../plugin/bulk-save.js');
 const standardPlugin = require('../plugin/standard.js');
 const customHooksPlugin = require('../plugin/custom-hooks.js');
-
+	
 var statSchema = new mongoose.Schema({
 	"dev" : Number,
 	"mode" : Number,
@@ -41,12 +41,15 @@ var statSchema = new mongoose.Schema({
 var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true }, 
 	dir: { type: mongoose.SchemaTypes.ObjectId, ref: 'dir' },
-	drive: { type: mongoose.SchemaTypes.ObjectId, ref: 'disk' },
+	partition: { type: mongoose.SchemaTypes.ObjectId, ref: 'partition' },
 	stats: { type: statSchema }
 }, {
 	discriminatorKey: 'fileType'
+	// toJSON: { virtuals: true }
 });
-
+// fsEntry.virtual('dirPath')
+// fsEntry.virtual('dir', { ref: 'dir', localField });
+// fsEntry.virtual('partition', { type: mongoose.SchemaTypes.ObjectId, ref: 'partition' });
 
 fsEntry.plugin(customHooksPlugin);
 fsEntry.plugin(timestampPlugin);
@@ -54,10 +57,30 @@ fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
 fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
 
+fsEntry.post('init', function() {
+	const fs = this;
+	const model = mongoose.model(this.constructor.baseModelName);
+	const Dir = mongoose.model/*.discriminator*/('dir');
+	const Partition = mongoose.model/*.discriminator*/('partition');
+	const dirPath = nodePath.dirname(fs.path);
+	console.verbose(`[model fsEntry ${model.modelName}].post('init'): fs.path='${fs.path}' dirPath='${dirPath}'`);
+	return //Q.all([
+		fs.populate('dir')//{ path: 'dir', match: { path: dirPath }, model: 'dir', justOne: true })
+		// Dir.findOne({ path: dirPath })
+		// .then(dir => fs.dir = dir._id)
+		// .then(() => fs.populate('dir')),
+		.populate('partition')//({ path: 'partition', match: { $where: function() { return fs.path.startsWith(this.mountpoint); } }, model: 'partition', justOne: true }))
+		// Partition.findOne({ $where: function() { return fs.path.startsWith(this.mountpoint); } })
+		// .then(partition => fs.partition = partition._id)
+		// .then(() => fs.populate('partition')) ])
+		.execPopulate()
+	.tap(() => console.verbose(`fsEntry.on('init'): fs=${inspect(fs)}`));
+});
+
 fsEntry.post('construct', async function construct(fs) {
 	var model = this;
 	const Dir = mongoose.model('dir');
-	const Drive = mongoose.model('drive');
+	const Partition = mongoose.model('partition');
 	const dirPath = fs.dir ? fs.dir.path : nodePath.dirname(fs.path);
 	console.verbose(`[model ${model.modelName}].post('construct'): path='${inspect(fs)}' dirPath=${dirPath}`);
 
@@ -69,23 +92,23 @@ fsEntry.post('construct', async function construct(fs) {
 			.tap(dir => fs.dir = dir._id)//_.set(fs, 'dir', dir))
 			// .tap(dir => dir.save());
 		}
-		if (!fs.drive) {
-			await Drive.find({}).then(drives => {
-				var searchDrives =_.reverse(_.sortBy(_.filter(drives,
-							drive => drive.mountpoint),
-						drive => drive.mountpoint.length));	
-				var drive = /*_.set*/(/*fs, 'drive',*/ _.find(searchDrives, drive => fs.path.startsWith(drive.mountpoint)));
-				if (drive) {
-					fs.drive = drive._id;
+		if (!fs.partition) {
+			await Partition.find({}).then(partitions => {
+				var searchPartitions =_.reverse(_.sortBy(_.filter(partitions,
+							partition => partition.mountpoint),
+						partition => partition.mountpoint.length));	
+				var partition = /*_.set*/(/*fs, 'partition',*/ _.find(searchPartitions, partition => fs.path.startsWith(partition.mountpoint)));
+				if (partition) {
+					fs.partition = partition._id;
 				}
-				console.verbose(`drives=${inspect(drives)} searchDrives=${inspect(searchDrives)} drive=${inspect(drive)} fs.drive=${inspect(fs.drive)}`);
+				console.verbose(`partitions=${inspect(partitions)} searchPartitions=${inspect(searchPartitions)} partition=${inspect(partition)} fs.partition=${inspect(fs.partition)}`);
 			});
-		} /*else if (!(fs.drive instanceof mongoose.Document)) {
-			await Drive.findOrCreate({ mountpoint: fs.drive.mountpoint }, fs.drive, { saveImmediate: true })
-			.tap(drive => fs.drive = drive._id)// _.set(fs, 'drive', drive))
-			// .tap(drive => drive.save());
+		} /*else if (!(fs.partition instanceof mongoose.Document)) {
+			await Partition.findOrCreate({ mountpoint: fs.partition.mountpoint }, fs.partition, { saveImmediate: true })
+			.tap(partition => fs.partition = partition._id)// _.set(fs, 'partition', partition))
+			// .tap(partition => partition.save());
 		}*/
-		console.verbose(`[model ${model.modelName}].post('construct'): path='${fs}' dir=${fs.dir} drive=${fs.drive}`)
+		console.verbose(`[model ${model.modelName}].post('construct'): path='${fs}' dir=${fs.dir} partition=${fs.partition}`)
 	} catch(err) {
 		model._stats.errors.push(err);
 		console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);
