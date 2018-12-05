@@ -5,8 +5,9 @@ const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
+const { promisePipe, artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
 const statPlugin = require('./stat.js');
+const Artefact = require('../../Artefact.js');
 
 /* Standard/common schema methods, statics
  */
@@ -16,7 +17,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	
 	schema.plugin(statPlugin, {
 		data: {
-			save: {},
 			validate: {},
 			bulkSave: {}
 			// 	items: {
@@ -186,7 +186,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * */
 	schema.static('getArtefacts', function getArtefacts(query, options = {}) {
 		var model = this;
-		console.log(`toArtefact(): model=${inspect(model, { compact: false })}, options=${inspect(options, { compact: false })}`);
+		console.verbose(`toArtefact(): model=${inspect(model, { compact: false })}, options=${inspect(options, { compact: false })}`);
 		return model.find(query).cursor({ transform: doc => doc.getArtefact(options) });
 	});
 
@@ -289,6 +289,32 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		.then(() => { console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
 		.then(() => Q(a));
 	
+	});
+
+	schema.static('findArtefacts', function findArtefacts(...args) {
+		var fns = [];
+		var query;
+		_.forEach(...args, (arg, i) => {
+			if (typeof arg === 'object') {
+				if (fns.length > 0) {
+					throw new TypeError(`findArtefacts: object after functions`);
+				}
+				if (query) {
+					options = query;
+				} else {
+					options = null;
+				}
+				query = arg;
+			} else if (typeof arg === 'function') {
+				fns.push(arg);
+			} else {
+				throw new TypeError(`findArtefacts: args must be [object], [object], [...functions]`);
+			} 
+		});
+		options = _.defaults(options, { concurrency: 8 });
+		query = query || {};
+		console.verbose(`findArtefacts: options=${inspect(options, { compact: true })} query=${inspect(query, { compact: true })}`);
+		return promisePipe({ concurrency: options.concurrency }, this.find(query).cursor(), fs => Artefact(fs), ...fns);
 	});
 
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {

@@ -61,9 +61,8 @@ function /*async*/ iterate(options) {
 						item.stats = stats;
 						// item.drive = drive;
 						item.fileType = stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown';
-						if (!stats.isDirectory()) return self.push(item);
 						var currentDepth = pathDepth(item.path) - self.rootDepth + 1;	// +1 because below here next files are read from this dir
-						if (((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {
+						if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {
 							nodeFs.readdir(item.path, (err, names) => {
 								if (err) return nextHandleError(err);
 								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);

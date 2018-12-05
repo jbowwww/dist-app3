@@ -130,7 +130,7 @@ var self = {
 			console.debug(`through2Concurrent.obj(${inspect(options, {compact:true})}): writeCount=${writeCount} threadCount=${threadCount} data=${inspect(data, { compact:true })}`);
 			
 			promiseFunctions(data)
-			.then(newData => { threadCount--; if (this.options.dataThru) { this.push(newData); } callback(); })
+			.then(newData => { threadCount--; if (this.options.dataThru) { this.push(newData); } process.nextTick(() => callback()); })
 			.catch(err => {
 				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: data });
 				if (options.catchErrors && typeof options.catchErrors === 'function') {

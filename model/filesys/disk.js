@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const { promisifyMethods } = require('../../utility.js');
@@ -49,7 +49,7 @@ disk.static('findOrPopulate', async function findOrPopulate() {
 					disk: diskDoc,
 					container: containerPartitionDoc/*Id*/
 				}), { saveImmediate: true })
-				.tap(partitionDoc => console.verbose(`diskDoc=${inspect(diskDoc)} partitionDoc=${inspect(partitionDoc)}`))
+				.tap(partitionDoc => console.verbose(`diskDoc=${inspect(diskDoc)} partitionDoc=${inspect(partitionDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)}`))
 				.then(partitionDoc => Q.all(mapPartitions(partition, partitionDoc/*._id*/)))
 				);
 			})(disk)))
