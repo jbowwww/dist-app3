@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -105,7 +105,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			var docVal = this.get(fullPath);
 			var schemaType = this.schema.path(fullPath);
 			if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray', 'ObjectID' ].includes(schemaType.instance))) {
-				console.verbose(`[model ${model.modelName}].updateDocument: ${fullPath}: ${schemaType.instance}`);
+				console.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: ${schemaType.instance}`);
 				this.updateDocument(/*schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal && updVal._id ? updVal._id :*/ updVal, fullPath + '.');
 			} else if (!_.isEqual(docVal, updVal)) {
 				console.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
@@ -152,22 +152,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
 
-		// var subDocs = [];
-		// model.schema.eachPath((path, schemaType) => {
-		// 	if (schemaType.options.ref && schemaType instanceof mongoose.SchemaTypes.ObjectId) {
-		// 		if (!(data[path] instanceof mongoose.Document) && !Object.hasOwnProperty(data, '_id')) {
-		// 			subDocs.push(
-		// 				mongoose.model(schemaType.options.ref).findOrCreate(data[path])
-		// 				.then(subDoc => data[path] = subDoc._id)
-		// 			);
-
-		// 	console.log(`findOrCreate: eachPath: subDoc: path='${path}' schemaType=${schemaType.instance} data=${inspect(data[path])}`);
-		// 		}
-		// 	}
-		// 	console.log(`findOrCreate: eachPath: path='${path}' schemaType=${inspect(schemaType)}`);
-		// });
-		// return Q.all(subDocs)
-		
 		return Q(model.findOne(query)).then(r => r ?
 			r.updateDocument(data).then(doc => options.saveImmediate ? doc.save() : doc)
 		 : 	model.construct(data).then(doc => options.saveImmediate ? doc.save() : doc));
@@ -181,14 +165,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		_primaryType: { type: String, required: false/*true*/, default: undefined }
 	});
 	schema.virtual('_artefact');
-
-	/* Find a _meta document from the given model(table)
-	 * */
-	schema.static('getArtefacts', function getArtefacts(query, options = {}) {
-		var model = this;
-		console.verbose(`toArtefact(): model=${inspect(model, { compact: false })}, options=${inspect(options, { compact: false })}`);
-		return model.find(query).cursor({ transform: doc => doc.getArtefact(options) });
-	});
 
 	/* Find a _meta document from the given model(table)
 	 * */
@@ -283,39 +259,43 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		});
 		doc._artefact = a;
 
-		var allModels = options.meta ? _.keys(options.meta) : _.filter(mongoose.modelNames(), modelName => mongoose.model(modelName).discriminators === undefined);
+		var allModels = options.meta ? _.keys(options.meta) :
+			_.filter(mongoose.modelNames(), modelName => {
+				var m = mongoose.model(modelName);
+				return m.discriminators === undefined && docModel.baseModelName != m.baseModelName && docModel.modelName != m.baseModelName && docModel.baseModelName != m.modelName;
+			});
 		
 		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
-		.then(() => { console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
+		.then(() => { console.debug(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
 		.then(() => Q(a));
 	
 	});
 
-	schema.static('findArtefacts', function findArtefacts(...args) {
-		var fns = [];
-		var query;
-		_.forEach(...args, (arg, i) => {
-			if (typeof arg === 'object') {
-				if (fns.length > 0) {
-					throw new TypeError(`findArtefacts: object after functions`);
-				}
-				if (query) {
-					options = query;
+	schema.query.getArtefacts = function getArtefacts(...args) {
+		var model = this;
+		var cursor = this.cursor({ transform: fs => Artefact(fs) });
+		Object.defineProperty(cursor, 'promisePipe', { enumerable: true, value: function cursorPromisePipe(...args) {
+			var fns = [];
+			var options = null;
+			_.forEach(args, (arg, i) => {
+				if (typeof arg === 'object') {
+					if (fns.length > 0 || options !== null) {
+						throw new TypeError(`findArtefacts: object after functions`);
+					}
+					options = arg;
+				} else if (typeof arg === 'function') {
+					fns.push(arg);
 				} else {
-					options = null;
-				}
-				query = arg;
-			} else if (typeof arg === 'function') {
-				fns.push(arg);
-			} else {
-				throw new TypeError(`findArtefacts: args must be [object], [object], [...functions]`);
-			} 
-		});
-		options = _.defaults(options, { concurrency: 8 });
-		query = query || {};
-		console.verbose(`findArtefacts: options=${inspect(options, { compact: true })} query=${inspect(query, { compact: true })}`);
-		return promisePipe({ concurrency: options.concurrency }, this.find(query).cursor(), fs => Artefact(fs), ...fns);
-	});
+					throw new TypeError(`findArtefacts: args must be [object], [...functions]`);
+				} 
+			});
+			options = _.defaults(options, { concurrency: 8 });
+			console.debug(`[model ${model.modelName}].getArtefacts().promisePipe(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
+			return promisePipe(cursor, options, ...fns);
+		}});
+		console.debug(`[model ${model.modelName}].getArtefacts(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
+		return cursor;
+	};
 
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
 		if (!_.isDate(timestamp)) {

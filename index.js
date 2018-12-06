@@ -21,7 +21,7 @@ const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs
 var tap = function(fn) { return (v => Q(fn(v)).then(() => v)); }; 	// a thenable function for tapping the promise value tpo call a function, but returning the original value   
 
 var searches = [
-	{ path: '/home/jk', maxDepth: 3 }
+	{ path: '/mnt/Stor', maxDepth: 2 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -31,17 +31,19 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 .then(() => FileSys.iterate({ searches }).catch(err => console.warn(`fsIterate: ${err.stack||err}`)))
 
-.then(() => File.findArtefacts(/*{ concurrency: 8 },*/
-	tap(a => console.verbose(`a: ${inspect(a)}`)),
-	ifPipe(a => a.file,
-		// tap(a => a.file.populate('dir').execPopulate()),
-		tap(f => console.verbose(`f=${inspect(f)}`)),
-		ifPipe(a => !a.file.isCheckedSince(a.file.stats.mtime), a => a.file.doHash()),
-		ifPipe(a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio, a => a.addMetaData('audio', {})),
-		ifPipe( a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime), a => a.audio.loadMetadata(a.file))),
-	a => a.bulkSave(),
-	tap(a => console.verbose(`a=${inspect(a)}`)))
-	.catch(err => console.warn(`File.find: ${err.stack||err}`)))
+.then(() => File.find().getArtefacts().promisePipe(
+	tap(a => console.verbose(`a=${inspect(a)}`)),
+	ifPipe(a => !a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime),
+		a => a.file.doHash()),
+		a => a.bulkSave()))
+
+.then(() => File.find().getArtefacts().promisePipe(
+	ifPipe(a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio, a => a.addMetaData('audio', {})),
+	ifPipe( a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime), a => a.audio.loadMetadata(a.file)),
+	a => a.bulkSave()))
+
+// tap(a => console.verbose(`a=${inspect(a)}`)))
+.catch(err => console.warn(`Err: ${err.stack||err}`))
 
 /*.delay(1500)*/.finally(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
