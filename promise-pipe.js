@@ -170,11 +170,15 @@ var self = {
 		return data => _.reduce(chain, (chain, current) => chain.then(current), Q(data));
 	},
 
+	tap(fn) { 	// a thenable function for tapping the promise value tpo call a function, but returning the original value   
+		return (v => Q(fn(v)).then(() => v));
+	},
+	
 	conditionalPipe(condition, ...pipe1) {//, pipe2 = null) {
 		return (data => condition(data) ? (self.chainPromiseFuncs(pipe1))(data).catch(() => data).then(() => data) : data);// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
 	},
 
-	ifPipe(condition, ...pipe1) {//, pipe2 = null) {
+	iff(condition, ...pipe1) {//, pipe2 = null) {
 		return (data => (condition(data) ? (self.chainPromiseFuncs(pipe1))(data).catch(() => data).then(() => data) : data));// (pipe2 ? self.chainPromiseFuncs(pipe2sdata) : data));
 	},
 

@@ -152,9 +152,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
 
-		return Q(model.findOne(query)).then(r => r ?
-			r.updateDocument(data).then(doc => options.saveImmediate ? doc.save() : doc)
-		 : 	model.construct(data).then(doc => options.saveImmediate ? doc.save() : doc));
+		return Q(model.findOne(query))
+		.then(r => r ? r.updateDocument(data) : model.construct(data))
+		.then(doc => options.saveImmediate ? doc.save() : doc);
 	});
 
 	// Artefact related
