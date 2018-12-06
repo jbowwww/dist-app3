@@ -23,6 +23,12 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 			return next(new Error(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: doc._ts.createdAt && this.isNew ${this.isModified()?'':'!'}this.isModified()`));
 		}
 		var now = Date.now();
+		/* `181207: New idea: at this point the plugin emits an event on the model (i think it is alreaaay an Eventemitter) and 
+		/& the document (also an EE i think, or make it one) named either create, update or check.
+		 * Other schemas can listen fofr these events on a model or on specific documents without having to use schema middleware directly 
+		 * Allows for eg/ : files can listen for their own creation/updates and (re)calculate hash as appropriate
+		 * 	: audio can listen for file creaete/update and load metadata appropriately
+		 * Seems generic enough for what ineed?? */
 		if (this.isNew) {
 			this._ts.createdAt = this._ts.updatedAt = this._ts.checkedAt = now;
 		} else if (this.isModified()) {
