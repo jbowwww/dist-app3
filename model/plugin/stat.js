@@ -64,11 +64,15 @@ module.exports = function statSchemaPlugin(schema, options) {
 		if (schema._stats !== undefined) {
 			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
 				_.assign({
-					errors: [],
+					errors: [],	// TODO: make this a getter (that works this time) that returns errors from create, update andn check
 					[util.inspect.custom]: statsInspect()/*(depth, options) {
 						return util.inspect(_.mapValues(this.errors && this.errors.length > 0 ? this : _.omit(this, [ 'errors' ]), (v, k) => v), 
 					}*/
-				}, _.mapValues(schema._stats, (value, key) => getNewStatBasicCountsObject(value)))
+				}, _.mapValues(schema._stats, (value, key) => ({ 
+					create: getNewStatBasicCountsObject(value),
+					update: getNewStatBasicCountsObject(value),
+					check: getNewStatBasicCountsObject(value)
+				})))
 			});
 		}
 		console.debug(`schema.on('init'): model=${inspect(model)}`);

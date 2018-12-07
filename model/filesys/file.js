@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -14,6 +14,22 @@ let file = new mongoose.Schema({
 });
 
 file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
+
+
+file.pre('validate', async function() {
+	var model = this.constructor;
+	var debugPrefix = `[doc ${model.modelName}]`;//`[${typeof model} ${model.modelName}]`;
+	console.verbose(`${debugPrefix}.pre('validate'): this=[${typeof this}] ${inspect(this, { compact: true })}`);
+	if (!this.exists('hash')/*!this.hash*/ || !this.isCheckedSince(this.stats.mtime)) {
+		return this.doHash()
+		.tap(f => console.verbose(`${debugPrefix}.pre('validate'): this.hash=...${this.hash.substr(-6)}`))
+		.catch(e => { console.warn(`${debugPrefix}.pre('validate'): error: ${err.stack||err}`); model._stats.errors.push(e); })
+	} else { 
+		console.verbose(`${debugPrefix}.pre('validate'): this.hash already current (=...${this.hash.substr(-6)})`);
+		return Q(this);
+	}
+});
+
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
 file.virtual('extension').get(function extension() {
@@ -39,7 +55,9 @@ file.methods.doHash = function() {
 	}).catch(err => {
 		console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
 		model._stats.ensureCurrentHash.errors.push(err);
-		return file;	// should i really actually be catching an err then returning file like nothing happened??
+		// return file;	// should i really actually be catching an err then returning file like nothing happened??
+		// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
+		throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
 	});	
 };
 

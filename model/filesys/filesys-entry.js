@@ -39,7 +39,7 @@ var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true }, 
 	dir: { type: mongoose.SchemaTypes.ObjectId, ref: 'dir' },
 	partition: { type: mongoose.SchemaTypes.ObjectId, ref: 'partition' },
-	stats: { type: statSchema }
+	stats: { type: statSchema, required: true }
 }, {
 	discriminatorKey: 'fileType'
 });

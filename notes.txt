@@ -1,7 +1,7 @@
 
 181207
 Next step! - implement event/document create/update/check events as noted in model/plugin/timestamp.js (best place to do it):
-
+Actually - implement in standard.js - this is where it explicitly already calculates a var actionType (althgouh timestamps practivally does it again as well)
 		/* `181207: New idea: at this point the plugin emits an event on the model (i think it is alreaaay an Eventemitter) and 
 		/& the document (also an EE i think, or make it one) named either create, update or check.
 		 * Other schemas can listen fofr these events on a model or on specific documents without having to use schema middleware directly 

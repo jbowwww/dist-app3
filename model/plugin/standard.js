@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -17,8 +17,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	
 	schema.plugin(statPlugin, {
 		data: {
+			// 'save' property is added on by the schema plugin itself
 			validate: {},
-			bulkSave: {}
+			construct: {},
+			bulkSave: {},
 			// 	items: {
 			// 		insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
 			// 		get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
@@ -28,67 +30,103 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		}
 	});
 
-	schema.pre('validate', function(next) {
-		var model = this.constructor;
-		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-		console.debug(`stat: [model ${model.modelName}].pre('validate'): actionType=${actionType} id=${this._id.toString()} model=${inspect(model, { compact: true })}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
-		this.constructor._stats.validate[actionType]++;
-		this.constructor._stats.validate.calls++;
-		return next();
-	});
-	schema.post('validate', function(doc, next) {
-		var model = this.constructor;
-		console.debug(`stat: [model ${model.modelName}].post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
-		this.constructor._stats.validate.success++;
-		return next();
-	});
-	schema.post('validate', function(err, doc, next) {
-		var model = this.constructor;
-		console.error(`stat: [model ${model.modelName}].post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
-		this.constructor._stats.validate.errors.push(err);
-		return next(err);
-	});
+	// schema.pre('validate', function(next) {
+	// 	var model = this.constructor;
+	// 	
+	// var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
+	// // 	
+	// 		this.constructor._stats.validate.calls++;
+	// 	return next();
+	// });
+	// schema.post('validate', function(doc, next) {
+	// 	var model = this.constructor;
+	// 	console.debug(`stat: [model ${model.modelName}].post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
+	// 	this.constructor._stats.validate.success++;
+	// 	return next();
+	// });
+	// 		this.constructor._stats[methodName].validate[actionType]++;	// schema.post('validate', function(err, doc, next) 
+	// {
+	// 	var model = this.constructor;
+	// 	console.error(`stat: [model ${model.modelName}].post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+	// 	this.constructor._stats.validate.errors.push(err);
+	// 	return next(err);
+	// });
 
-	schema.pre('save', function(next) {
-		var model = this.constructor;
-		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-		console.debug(`stat: [model ${model.modelName}].pre('save'): actionType=${actionType} id=${this._id.toString()}`);
-		this.constructor._stats.save[actionType]++;
-		this.constructor._stats.save.calls++;
-		return next();
-	});
-	schema.post('save', function(doc, next) {
-		var model = this.constructor;
-		console.debug(`stat: [model ${model.modelName}].post('save'): id=${this._id.toString()}`);
-		this.constructor._stats.save.success++;
-		return next();
-	});
-	schema.post('save', function(err, doc, next) {
-		var model = this.constructor;
-		console.error(`stat: [model ${model.modelName}].post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
-		this.constructor._stats.save.errors.push(err);
-		return next(err);
-	});
+	// schema.pre('save', function(next) {
+	// 	var model = this.constructor;
+	// 	var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
+	// 	console.debug(`stat: [model ${model.modelName}].pre('save'): actionType=${actionType} id=${this._id.toString()}`);
+	// 	this.constructor._stats.save[actionType]++;
+	// 	this.constructor._stats.save.calls++;
+	// 	return next();
+	// });
+	// schema.post('save', function(doc, next) {
+	// 	var model = this.constructor;
+	// 	console.debug(`stat: [model ${model.modelName}].post('save'): id=${this._id.toString()}`);
+	// 	this.constructor._stats.save.success++;
+	// 	return next();
+	// });
+	// schema.post('save', function(err, doc, next) {
+	// 	var model = this.constructor;
+	// 	console.error(`stat: [model ${model.modelName}].post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
+	// 	this.constructor._stats.save.errors.push(err);
+	// 	return next(err);
+	// });
 
-	schema.pre('construct', function(next) {
-		var model = this;
-		console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
-		return next();
-	});
-	schema.post('construct', function(doc, next) {
-		var model = this;
-		console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
-		return next();
-	});
-	schema.post('construct', function(err, doc, next) {
-		var model = this;//.constructor;
-		console.error(`stat: [model ${model.modelName}].post('construct') error: id=${doc && doc._id ? doc._id.toString() : '(null)'}: ${err.stack||err}`);
-		model._stats.errors.push(err);
-		return next(err);
-	});
+	// schema.pre('construct', function(next) {
+	// 	var model = this;
+	// 	console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
+	// 	return next();
+	// });
+	// schema.post('construct', function(doc, next) {
+	// 	var model = this;
+	// 	console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
+	// 	return next();
+	// });
+	// schema.post('construct', function(err, doc, next) {
+	// 	var model = this;//.constructor;
+	// 	console.error(`stat: [model ${model.modelName}].post('construct') error: id=${doc && doc._id ? doc._id.toString() : '(null)'}: ${err.stack||err}`);
+	// 	model._stats.errors.push(err);
+	// 	return next(err);
+	// });
 
 	schema.static('construct', function construct(data, cb) {
 		return Q(new (this)(data));
+	});
+
+// would use a regex to match everything but i can't see any way to then get the actual event name??
+//add more as they become useful. I'm not sure save/bulkSave are very useful because of mongoose not firing middleware from it's bulkSave and me doing it custom
+	_.forEach(['validate'/*, 'save', 'bulkSave', 'find'*/], methodName => {
+		
+		schema.pre(methodName, function(next) {
+			var doc = this;
+			var model = this.constructor;
+			console.debug(`[model ${model.modelName}].pre('${methodName}'): doc=${doc._id}`);// args=${inspect(args)} ${args.length}`);
+			var eventName = 'pre.' + methodName;
+			model.emit(eventName, doc);
+			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			var actionType = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
+			doc._actions[methodName] = actionType;
+			model._stats[methodName][actionType].calls++;
+			return next();
+		});
+
+		schema.post(methodName, function(err, doc, next) {
+			var doc = this;
+			var model = this.constructor;
+			var actionType = doc._actions[methodName];
+			var debugPrefix = `[model ${model.modelName}]`;
+			if (err) {
+				console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
+				return model._stats[methodName][actionType].errors.push(err);				
+			}
+			console.debug(`${debugPrefix}.post('${methodName}'): doc=${doc._id}`);// args=${inspect(args)} ${args.length}`);
+			model.emit(eventName, doc);
+			doc.emit(methodName);			// i wonder what this gets bound as? in any case shuld be the doc
+			model._stats[methodName][actionType].success++;
+			return next();
+		});
+
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
