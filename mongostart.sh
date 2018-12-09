@@ -1,1 +1,1 @@
-mongod --dbpath=/var/lib/mongo/db
+mongod --dbpath=/var/lib/mongo/db --replSet rsArtefacts0

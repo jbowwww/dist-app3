@@ -70,7 +70,7 @@ var self = {
 				writeable,
 				...args);
 		});
-		return _.mixin(/*self, */thenable, writeable);
+		return /*_.mixin*/(/*self, */thenable/*, writeable*/);
 		// var pp = sourceStream.pipe());
 		// if (typeof options.catchErrors === 'function') {
 		// 	pp = pp.catch(err => options.catchErrors);
