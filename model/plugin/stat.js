@@ -10,18 +10,18 @@ const _ = require('lodash');
 // 181014: TODO:?? Change this to a generic model static data member plugin (not just for stats objects)?
 //
 
-	var statsInspect = ((indent = 0) => function (depth, options) {
+	var statsInspect = ((indent = 0) => function (depth, options = {}) {
 		// console.verbose(`statsInspect: depth=${depth} options=${JSON.stringify(options)}`);
 		// var r = inspectPretty(_.mapValues(_.omit(this, ['errors']), (value, propName) => /*inspect*/(this[propName]/*, { compact: true }*/)));//.join(',\n');
 	 // 	return !this.errors || !this.errors.length ? r
 	 // 	 : r.substring(0, r.length - 2) + '\n' + '\t'.repeat(indent+1) + 'Errors: ' + this.errors.map(err=>err.message/*.stack*/).join(',\n') + '\n' + '\t'.repeat(indent) + '}';
-		options = _.defaults(options || {}, { compact: true, indentationLvl: 1 });
+		options = _.defaults(options, { compact: true, indentationLvl: 1 });
 		var r = options.compact ? '{ ' : "{\n"+'  '.repeat(options.indentationLvl);/*inspectPretty*/
 		// 	`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total}, created: ${this.created}, updated: ${this.updated}, checked: ${this.checked}`;
 		var keys = _.keys(_.omit(this, ['errors']));//, 'calls', 'success', 'failed', 'total', 'created', 'updated', 'checked']));
 		if (this.errors && this.errors.length > 0) keys.push('errors');
 		r += _.map(keys, k => (/*", "+" ".repeat(options.indentationLvl+1)+*/k+": "+
-			( k !== 'errors' ? util.inspect(this[k], /*_.assign(*//*options*//*, { compact: true })*/)
+			( k !== 'errors' ? util.inspect(this[k], _.assign(options, { compact: true }))
 		 : 	'[' + this.errors.length + ']' +
 		/*util.inspect*/(_.map(this.errors, e => e.message)/*, _.assign(options, { compact: true })*/).join(",\n"))))
 		.join(options.compact ? ", " : ",\n"+'  '.repeat(options.indentationLvl));
@@ -37,9 +37,9 @@ function getNewStatBasicCountsObject(extra) {
 		success: 0,												// how many calls to this stat succeeded 
 		get failed() { return this.errors.length; },			// how many failed (counts errors)	
 		get total() { return this.success + this.failed; },		// success + total
-		created: 0,
-		updated: 0,
-		checked: 0,
+		create: 0,
+		update: 0,
+		check: 0,
 		errors: []
 	});
 	_.assign(s, _.cloneDeep(extra));
@@ -68,11 +68,11 @@ module.exports = function statSchemaPlugin(schema, options) {
 					[util.inspect.custom]: statsInspect()/*(depth, options) {
 						return util.inspect(_.mapValues(this.errors && this.errors.length > 0 ? this : _.omit(this, [ 'errors' ]), (v, k) => v), 
 					}*/
-				}, _.mapValues(schema._stats, (value, key) => ({ 
-					create: getNewStatBasicCountsObject(value),
+				}, _.mapValues(schema._stats, (value, key) => (/*{ 
+					create:*/ getNewStatBasicCountsObject(value)/*,
 					update: getNewStatBasicCountsObject(value),
 					check: getNewStatBasicCountsObject(value)
-				})))
+				}*/)))
 			});
 		}
 		console.debug(`schema.on('init'): model=${inspect(model)}`);

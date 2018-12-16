@@ -71,7 +71,7 @@ fsEntry.post('construct', async function construct(fs) {
 	try {
 		if (dirPath === fs.path) {
 			fs.dir = null;
-		} else if (!(fs.dir instanceof mongoose.Document)) {
+		} else if (!fs.dir) {// instanceof mongoose.Document)) {
 			await Dir.findOne({ path: dirPath }).then(dir => _.set(fs, 'dir', dir ? dir._id : null));
 		}
 		if (!fs.partition) {

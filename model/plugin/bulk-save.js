@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -20,65 +20,87 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 			batchTimeout: 750
 		}, options);
 
-		console.debug(`[model ${model.modelName}].bulkSave(): isNew=${doc.isNew} isModified()=${doc.isModified()} modifiedPaths=${doc.modifiedPaths}`);
+		console.verbose(`[model ${model.modelName}].bulkSave(): isNew=${doc.isNew} isModified()=${doc.isModified()} modifiedPaths=${doc.modifiedPaths()}`);
 
-		return Q.Promise((resolve, reject, notify) => {
-			doc.validate().then(() => {
+		//Q.Promise((resolve, reject, notify) => {
+		return doc.validate().then(() => {
 				
 				// insert, update, or do nothing depending if the doc is new, updated or unmodified
-				var actionType = doc.isNew ? 'created' : /*doc._id !== null && */doc.isModified() ? 'updated' : 'checked';
+				var actionType = doc._actions['bulkSave'];//doc.isNew ? 'created' : /*doc._id !== null && */doc.isModified() ? 'updated' : 'checked';
 				model._stats.bulkSave[actionType]++;
 				model._stats.bulkSave.calls++;
-				if (actionType === 'checked') {
+				console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} model._bulkSaveDeferred=${model._bulkSaveDeferred?inspect(model._bulkSaveDeferred):'(undefined)'}`);
+				if (actionType === 'check') {
 					model._stats.bulkSave.success++;
-					console.debug(`[model ${model.modelName}].bulkSave unmodified doc=${inspect(doc._doc)}`);
-					return resolve(doc);
-				} else if (actionType === 'created') {
-					var bsOp = { op: { insertOne: { document: doc.toObject() } }, resolve() { doc.isNew = false; }, doc: doc };
-				} else { //if (actionType === 'updated') {
-					var bsOp = { op: { updateOne: { filter: { _id: doc.get('_id') }, update: { $set: doc.toObject() } } }, doc: doc };
-				}
+					return Q(doc);//(doc);
+				}// else if (actionType === 'created') {
 				
-				// batches of documents written when either options.maxBatchSize is reached or options.batchTimeout elapses
+				if (!model._bulkSaveDeferred) {
+					_.set(model, '_bulkSaveDeferred', Q.defer());
+				}
 				if (!model._bulkSave) {
 					model._bulkSave = [];
-				}
-				model._bulkSave.push(bsOp);
-				if (model._bulkSave.length >= options.maxBatchSize) {
-					if (model._bulkSaveTimeout) {
-						clearTimeout(model._bulkSaveTimeout);
-						delete model._bulkSaveTimeout;
+				} else if (model._bulkSave.indexOf(doc) >= 0) {
+					console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} doc._id=${doc._id}: doc already queued for bulkWrite`);// (array index #${di}`);
+				} else {
+					model._bulkSave.push(doc);
+					if (model._bulkSave.length >= options.maxBatchSize) {
+						if (model._bulkSaveTimeout) {
+							clearTimeout(model._bulkSaveTimeout);
+							delete model._bulkSaveTimeout;
+						}
+						process.nextTick(() => innerBulkSave());
+					} else if (!model._bulkSaveTimeout) {
+						model._bulkSaveTimeout = setTimeout(innerBulkSave, options.batchTimeout);
 					}
-					innerBulkSave();
-				} else if (!model._bulkSaveTimeout) {
-					model._bulkSaveTimeout = setTimeout(innerBulkSave, options.batchTimeout);
 				}
 
 				// resolves the return promise with the document queued for bulk writing, although it is not written yet
-				resolve(doc);
+				// resolve(doc);
+				return Q(doc);//model._bulkSaveDeferred.promise;
 				
 				// Perform actual bulk save
 				function innerBulkSave() {
-					var bs = (model._bulkSave);
+					var bs = _.slice(model._bulkSave);
 					model._bulkSave = [];
-					console.verbose(`[model ${model.modelName}].bulkWrite([${bs.length}]=${inspect(bs.map(bsEntry => bsEntry.op), { depth: 3, compact: true })}`);
-					model.bulkWrite(_.map(bs, bsEntry => bsEntry.op)).then(bulkWriteOpResult => {
+					var bsd = model._bulkSaveDeferred;
+					_.unset(model, '_bulkSaveDeferred');
+					var bulkOps = _.map(bs, bsDoc => bsDoc._actions['bulkSave'] === 'create' ?
+						{ insertOne: { document: bsDoc.toObject() } }
+					 : 	{ updateOne: { filter: { _id: bsDoc.get('_id') }, update: { $set: bsDoc.toObject() } } });
+					console.verbose(`[model ${model.modelName}].bulkWrite( [${bulkOps.length}] = ${inspect(bulkOps, { depth: 3, compact: true })} )`);
+					model.bulkWrite(bulkOps).then(bulkWriteOpResult => {	//bsEntry.op)).then(bulkWriteOpResult => {
 						if (bulkWriteOpResult.result.ok) {
 							model._stats.bulkSave.success += bulkWriteOpResult.result.nModified;
-							console.debug(`[model ${model.modelName}].innerBulkSave(): bulkWriteOpResult=${inspect(bulkWriteOpResult)}`);
+							console.verbose(`[model ${model.modelName}].innerBulkSave(): bulkWriteOpResult=${inspect(bulkWriteOpResult)}`);
+							// _.each(bs, bsDoc => {
+							// 	bsDoc._bulkSaveDeferred.resolve(bulkWriteOpResult);
+							// 	_.unset(bsDoc, '_bulkSaveDeferred');
+							// });
+							bsd.resolve(bulkWriteOpResult);
 						} else {
 							_.each(bulkWriteOpResult.result.writeErrors, writeError => {
 								model._stats.bulkSave.errors.push(writeError);
 								console.error(`bulkWriteError: ${writeError.stack||writeError}`);
 							});
+							// _.each(bs, bsDoc => {
+							// 	bsDoc._bulkSaveDeferred.reject(bulkWriteOpResult);
+							// 	_.unset(bsDoc, '_bulkSaveDeferred');
+							// });
+							bsd.reject(bulkWriteOpResult);
 						}
 					}).catch(err => {	
 						model._stats.bulkSave.errors.push(err);
 						console.error(`bulkWriteError: ${err.stack||err}`);
+						// _.each(bs, bsDoc => {
+						// 	bsDoc._bulkSaveDeferred.reject(err);
+						// 	_.unset(bsDoc, '_bulkSaveDeferred');
+						// });
+						bsd.reject(err);
 					}).done();
 				}
-			}).catch(err => reject(err));
-		});
+			});//.catch(err => reject(err));
+		// });
 
 	});
 

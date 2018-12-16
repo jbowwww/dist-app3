@@ -1,7 +1,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'log' });	// verbose debug log
+const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'verbose' });	// verbose debug log
 const stream = require('stream');
 const _ = require('lodash');
 const inspect = require('util').inspect;
@@ -62,14 +62,14 @@ var self = {
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
 		var writeable = self.writeablePromiseStream(options, ...promiseFunctions);
 		var thenable = self.streamPromise(sourceStream.pipe(writeable), { resolveEvent: 'finish' });
-		_.set(writeable, 'promisePipe', function promisePipe(...args) {
-			console.debug(`writeable.promisePipe(): this=${inspect(this)} writeable=${inspect(writeable)} thenable=${inspect(thenable)}`);
-			writeable.options.dataThru = true;
-			return self.promisePipe(
-				typeof args[0] === 'object' ? args.shift() : { },
-				writeable,
-				...args);
-		});
+		// _.set(writeable, 'promisePipe', function promisePipe(...args) {
+		// 	console.debug(`writeable.promisePipe(): this=${inspect(this)} writeable=${inspect(writeable)} thenable=${inspect(thenable)}`);
+		// 	writeable.options.dataThru = true;
+		// 	return self.promisePipe(
+		// 		typeof args[0] === 'object' ? args.shift() : { },
+		// 		writeable,
+		// 		...args);
+		// });
 		return /*_.mixin*/(/*self, */thenable/*, writeable*/);
 		// var pp = sourceStream.pipe());
 		// if (typeof options.catchErrors === 'function') {
@@ -89,11 +89,13 @@ var self = {
 			// );
 	},
 
-	writeablePromiseStream(...args/*, options = {}*/) {
-		var options, promiseFunctions = [];
+	writeablePromiseStream(...args/*[options,] ...promiseFunctions */) {
+		var options, promiseFunctions = [], promiseChain;
 
 		_.forEach(args, (arg, i) => {
-			if (typeof arg === 'object') {
+			if (_.isArray(arg) && _.every(arg, element => _.isFunction(element))) {
+				promiseFunctions = _.slice(arg);
+			} else if (typeof arg === 'object') {
 				if (promiseFunctions.length > 0) {
 					throw new TypeError('promisePipe: arguments must end with promise functions');
 				}
@@ -114,8 +116,8 @@ var self = {
 		var writeCount = 0;
 		var debugThreadInterval = null;
 
-		promiseFunctions = self.chainPromiseFuncs(_.isArray(promiseFunctions[0]) && _.every(promiseFunctions[0], pf => _.isFunction(pf)) ? promiseFunctions[0] : promiseFunctions);
-		console.debug(`promiseFunctions: ${/*inspect*/(promiseFunctions)}`);
+		promiseFunctions = self.chainPromiseFuncs(promiseFunctions);
+		console.debug(`writeablePromiseStream(${args.join(', ')}): options=${inspect(options, { compact: true })} promiseFucntions=${promiseFunctions.toString()}`);
 		
 		return _.set(through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
 
@@ -124,24 +126,31 @@ var self = {
 			if (!debugThreadInterval) {
 				console.debug(`!debugThreadInterval`);
 				debugThreadInterval = setInterval(() => {
-					console.verbose(`writeablePromiseStream.write start: threadCount=${threadCount}`);//data=${inspect(data instanceof mongoose.Document ? data.toObject() : data, { compact: true })}`);
+					console.verbose(`writeablePromiseStream.write start: writeCount=${writeCount} threadCount=${threadCount}`);//data=${inspect(data instanceof mongoose.Document ? data.toObject() : data, { compact: true })}`);
 				}, 5000);
 			}
 			console.debug(`through2Concurrent.obj(${inspect(options, {compact:true})}): writeCount=${writeCount} threadCount=${threadCount} data=${inspect(data, { compact:true })}`);
 			
 			promiseFunctions(data)
-			.then(newData => { threadCount--; if (this.options.dataThru) { this.push(newData); } process.nextTick(() => callback()); })
+			.then(newData => {
+				if (this.options.dataThru) {
+					this.push(newData);
+				}
+				threadCount--;
+				// process.nextTick(() =>
+				 callback();
+				 // );
+				 return newData;
+			})
 			.catch(err => {
 				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: data });
 				if (options.catchErrors && typeof options.catchErrors === 'function') {
 					options.catchErrors(err);
 				}
 				threadCount--;
-				if (options.emitStreamErrors) {
-					callback(/*err*/); 	//this.emit('error', err);
-				} else {
-					callback();
-				}
+				// process.nextTick(() =>
+				 callback();
+				 // );
 			}).done();
 
 		}, function(cb) {

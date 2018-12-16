@@ -10,25 +10,26 @@ const mongoose = require('mongoose');
 const FsEntry = require('./filesys-entry.js');
 
 let file = new mongoose.Schema({
-	hash: { type: String, required: false }
+	hash: { type: String, /*default: '',*/ required: false },
+	hashUpdated: { type: Date, /*default: 0,*/ required: false }
 });
 
 file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
 
 
-file.pre('validate', async function() {
-	var model = this.constructor;
-	var debugPrefix = `[doc ${model.modelName}]`;//`[${typeof model} ${model.modelName}]`;
-	console.verbose(`${debugPrefix}.pre('validate'): this=[${typeof this}] ${inspect(this, { compact: true })}`);
-	if (!this.exists('hash')/*!this.hash*/ || !this.isCheckedSince(this.stats.mtime)) {
-		return this.doHash()
-		.tap(f => console.verbose(`${debugPrefix}.pre('validate'): this.hash=...${this.hash.substr(-6)}`))
-		.catch(e => { console.warn(`${debugPrefix}.pre('validate'): error: ${err.stack||err}`); model._stats.errors.push(e); })
-	} else { 
-		console.verbose(`${debugPrefix}.pre('validate'): this.hash already current (=...${this.hash.substr(-6)})`);
-		return Q(this);
-	}
-});
+// file.post('save', async function() {
+// 	var model = this.constructor;
+// 	var debugPrefix = `[doc ${model.modelName}]`;//`[${typeof model} ${model.modelName}]`;
+// 	console.verbose(`${debugPrefix}.post('save'): this=[${typeof this}] ${inspect(this, { compact: true })}`);
+// 	if (!this.exists('hash')/*!this.hash*/ || this.hashUpdated < this._ts.checkedAt) {
+// 		return this.doHash()
+// 		.tap(f => console.verbose(`${debugPrefix}.pre('validate'): this.hash=...${this.hash.substr(-6)}`))
+// 		.catch(e => { console.warn(`${debugPrefix}.pre('validate'): error: ${err.stack||err}`); model._stats.errors.push(e); })
+// 	} else { 
+// 		console.verbose(`${debugPrefix}.pre('validate'): this.hash already current (=...${this.hash.substr(-6)})`);
+// 		return Q(this);
+// 	}
+// });
 
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
@@ -50,11 +51,12 @@ file.methods.doHash = function() {
 		if (!file.hash) { model._stats.ensureCurrentHash.created++; }
 		else { model._stats.ensureCurrentHash.updated++; }
 		file.hash = hash;
-		console.debug(`${debugPrefix}.doHash(): file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
+		file.hashUpdated = Date.now();
+		console.verbose(`${debugPrefix}.doHash(): file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
 		return file;
 	}).catch(err => {
-		console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
 		model._stats.ensureCurrentHash.errors.push(err);
+		console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
 		// return file;	// should i really actually be catching an err then returning file like nothing happened??
 		// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
 		throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )

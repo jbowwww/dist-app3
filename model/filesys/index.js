@@ -17,14 +17,18 @@ const Artefact = require('../../Artefact.js');
 
 module.exports.iterate = function fsIterate(options, ...promisePipeFuncs) {
 	options = _.defaults(options, { searches: [], saveImmediate: false, concurrency: 8 });
-	return Q.all(_.map(options.searches, search =>
-		chainPromiseFuncs(
-			// save the root dir document explicitly so that it exists when the other file/dir docs need to find/reference it
-			search => createFsItem(search.path).then(searchRootDirDoc => searchRootDirDoc.save()), 
-			search => promisePipe({ concurrency: options.concurency }, rawFsIterate(search),
-				fs => FsEntry.findOrCreate({ path: fs.path }, fs, { saveImmediate: fs.fileType === 'dir' || options.saveImmediate }),
-				fs => fs.fileType !== 'dir' && !options.saveImmediate ? fs.bulkSave() : fs,		// saves at least directories immediately, because files may reference them 
-				...promisePipeFuncs))));
+	return Q.all(_.map(options.searches, search => createFsItem(search.path)
+		.then(searchRootDir => FsEntry.findOrCreate({ path: searchRootDir.path }, searchRootDir))
+		.then(searchRootDirDoc => searchRootDirDoc.save())
+		// .then(searchRootDirDoc => Artefact(searchRootDirDoc))
+		// .tap(a => console.verbose(`a=${inspect(a)}`))
+		.then(searchRootDirDoc => promisePipe(
+			iterate(search),
+			{ concurrency: options.concurency },			 //promisePipe({ concurrency: options.concurency },
+			fs => FsEntry.findOrCreate({ path: fs.path }, fs, { saveImmediate: fs.fileType === 'dir' || options.saveImmediate }),	//false }),
+			fs => Artefact(fs),
+			a => a.dir || options.saveImmediate ? a/*.save()*/ : a.bulkSave(),		// saves at least directories immediately, because files may reference them 
+			...promisePipeFuncs))));
 };
 
 module.exports.FsEntry = FsEntry;
