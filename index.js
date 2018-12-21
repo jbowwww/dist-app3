@@ -39,12 +39,12 @@ var pipelines = {
 		var _a = (a.file||a.dir);
 		console.verbose(`bs_a=${_a.path} isNew=${_a.isNew} isModified=${_a.isModified()} modPaths=${_a.modifiedPaths()}`);
 	} ),
-	bulkSave: chainPromiseFuncs(
+	bulkSave: /*chainPromiseFuncs*/(
 		a => a.bulkSave() ),
-	doHash: chainPromiseFuncs(
+	doHash: /*chainPromiseFuncs*/(
 		iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ) ),
 		///*tap( a => console.verbose(`a1=${inspect(a)}`) )*/ ),
-	doAudio: chainPromiseFuncs(
+	doAudio: /*chainPromiseFuncs*/(
 		iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
 			iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
 			iff( a => !a.audio.isCheckedSince(a.file._ts.updated), a => a.audio.loadMetadata(a.file) ) ) )

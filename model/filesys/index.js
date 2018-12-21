@@ -15,11 +15,14 @@ const File = require('./file.js');
 
 const Artefact = require('../../Artefact.js');
 
+const debug = function(msg = 'promiseFunc: val=') { return (val => { console.debug(`${msg}${val}`); return val; }); };
+
 module.exports.iterate = function fsIterate(options, ...promisePipeFuncs) {
 	options = _.defaults(options, { searches: [], saveImmediate: false, concurrency: 8 });
-	return Q.all(_.map(options.searches, search => createFsItem(search.path)
-		.then(searchRootDir => FsEntry.findOrCreate({ path: searchRootDir.path }, searchRootDir))
-		.then(searchRootDirDoc => searchRootDirDoc.save())
+	console.verbose(`fsIterate(options=${inspect(options, {depth: 3, compact:true})}), promisePipeFuncs=[\n\t${promisePipeFuncs.map(ppf => ppf.toString()).join('\n\t')} ]`);
+	return Q.all(_.map(options.searches, search => createFsItem(search.path).then(debug())
+		.then(searchRootDir => FsEntry.findOrCreate({ path: searchRootDir.path }, searchRootDir)).then(debug())
+		.then(searchRootDirDoc => searchRootDirDoc.save()).then(debug())
 		// .then(searchRootDirDoc => Artefact(searchRootDirDoc))
 		// .tap(a => console.verbose(`a=${inspect(a)}`))
 		.then(searchRootDirDoc => promisePipe(
@@ -28,7 +31,9 @@ module.exports.iterate = function fsIterate(options, ...promisePipeFuncs) {
 			fs => FsEntry.findOrCreate({ path: fs.path }, fs, { saveImmediate: fs.fileType === 'dir' || options.saveImmediate }),	//false }),
 			fs => Artefact(fs),
 			a => a.dir || options.saveImmediate ? a/*.save()*/ : a.bulkSave(),		// saves at least directories immediately, because files may reference them 
-			...promisePipeFuncs))));
+			...promisePipeFuncs))
+		.then(debug('fsIterate(${inspect(search, {compact:true})}) return: '))))
+	.then(`Finished ${options.searches.length} searches`);
 };
 
 module.exports.FsEntry = FsEntry;

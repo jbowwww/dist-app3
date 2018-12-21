@@ -119,21 +119,21 @@ var self = {
 		promiseFunctions = self.chainPromiseFuncs(promiseFunctions);
 		console.debug(`writeablePromiseStream(${args.join(', ')}): options=${inspect(options, { compact: true })} promiseFucntions=${promiseFunctions.toString()}`);
 		
-		return _.set(through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
+		return /*_.set*/(through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
 
 			writeCount++;
 			threadCount++;
-			if (!debugThreadInterval) {
-				console.debug(`!debugThreadInterval`);
-				debugThreadInterval = setInterval(() => {
-					console.verbose(`writeablePromiseStream.write start: writeCount=${writeCount} threadCount=${threadCount}`);//data=${inspect(data instanceof mongoose.Document ? data.toObject() : data, { compact: true })}`);
-				}, 5000);
-			}
+			// if (!debugThreadInterval) {
+			// 	console.debug(`!debugThreadInterval`);
+			// 	debugThreadInterval = setInterval(() => {
+			// 		console.verbose(`writeablePromiseStream.write start: writeCount=${writeCount} threadCount=${threadCount}`);//data=${inspect(data instanceof mongoose.Document ? data.toObject() : data, { compact: true })}`);
+			// 	}, 5000);
+			// }
 			console.debug(`through2Concurrent.obj(${inspect(options, {compact:true})}): writeCount=${writeCount} threadCount=${threadCount} data=${inspect(data, { compact:true })}`);
 			
 			promiseFunctions(data)
 			.then(newData => {
-				if (this.options.dataThru) {
+				if (options.dataThru) {
 					this.push(newData);
 				}
 				threadCount--;
@@ -153,14 +153,14 @@ var self = {
 				 // );
 			}).done();
 
-		}, function(cb) {
+		}));/*, function(cb) {
 			console.verbose(`through2Concurrent.obj.flush: debugThreadInterval=${debugThreadInterval} writeCount=${writeCount} threadCount=${threadCount}`);
-			if (debugThreadInterval) {
-				clearInterval(debugThreadInterval);
-				debugThreadInterval = null;
-			}
+			// if (debugThreadInterval) {
+			// 	clearInterval(debugThreadInterval);
+			// 	debugThreadInterval = null;
+			// }
 			cb();
-		}), 'options', options);
+		})*///, 'options', options);
 	},
 
 	chainPromiseFuncs(...args) {

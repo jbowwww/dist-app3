@@ -45,14 +45,14 @@ module.exports = {
 		var path = nodePath.resolve(options.path);
 		console.verbose(`iterate('${path}', ${inspect(options)})`);
 	  	
-	  	var drive;
+	  	var drive;/*
 		getDevices().then(drives => {
 	  		drive = _.find(_.sortBy(_.filter(drives,
 		  			drive => typeof drive.mountpoint === 'string'),
 		  		drive => drive.mountpoint.length ),
 		  	drive => path.startsWith(drive.mountpoint));
 		  	console.verbose(`iterate('${path}'): drive=${inspect(drive)}`);
-	  	});
+	  	});*/
 
 		var self = _.extend({
 			root: path,
@@ -90,9 +90,11 @@ module.exports = {
 					}).catch(err => nextHandleError(err));
 
 					function nextHandleError(err) {
-						handleError(err);
+						options.handleError(err);
 						self.errors.push(err);
-						process.nextTick(() => self.emit('error', err));
+						// process.nextTick(() =>
+						 self.emit('error', err);
+						 // );
 						return next();//1;
 					}
 
