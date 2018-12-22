@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'log' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -10,6 +10,9 @@ mongoose.Promise = Q.Promise;
 
 module.exports = function bulkSaveSchemaPlugin(schema, options) {
 		
+	/* 181222: Note: Don't use bulkSave (at least currently) in a promisePipe unless it is at the END or at the END of a tap chain
+	 * Because currently it returns a bulkwriteopresult and not the document (unless the doc is unmodified requiring no save, then it returns a doc
+	 */
 	schema.method('bulkSave', function bulkSave(options) {
 
 		var model = this.constructor;
@@ -43,15 +46,19 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				} else if (model._bulkSave.indexOf(doc) >= 0) {
 					console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} doc._id=${doc._id}: doc already queued for bulkWrite`);// (array index #${di}`);
 				} else {
-					model._bulkSave.push(doc);
+					model._bulkSave.push(_.set(doc.toObject(), '_actions', doc._actions));
 					if (model._bulkSave.length >= options.maxBatchSize) {
 						if (model._bulkSaveTimeout) {
 							clearTimeout(model._bulkSaveTimeout);
 							delete model._bulkSaveTimeout;
 						}
-						process.nextTick(() => innerBulkSave());
+						((bs, bsd) => process.nextTick(() => innerBulkSave(bs, bsd)))(_.slice(model._bulkSave), model._bulkSaveDeferred);
+						model._bulkSave = [];
+						_.unset(model, '_bulkSaveDeferred');
 					} else if (!model._bulkSaveTimeout) {
-						model._bulkSaveTimeout = setTimeout(innerBulkSave, options.batchTimeout);
+						
+						((bs, bsd) => setTimeout(() => innerBulkSave(bs, bsd), options.batchTimeout))(_.slice(model._bulkSave), model._bulkSaveDeferred);
+						
 					}
 				}
 
@@ -60,15 +67,11 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				return Q(doc);//model._bulkSaveDeferred.promise;
 				
 				// Perform actual bulk save
-				function innerBulkSave() {
-					var bs = _.slice(model._bulkSave);
-					model._bulkSave = [];
-					var bsd = model._bulkSaveDeferred;
-					_.unset(model, '_bulkSaveDeferred');
+				function innerBulkSave(bs, bsd) {
 					var bulkOps = _.map(bs, bsDoc => bsDoc._actions['bulkSave'] === 'create' ?
-						{ insertOne: { document: bsDoc.toObject() } }
-					 : 	{ updateOne: { filter: { _id: bsDoc.get('_id') }, update: { $set: bsDoc.toObject() } } });
-					console.verbose(`[model ${model.modelName}].bulkWrite( [${bulkOps.length}] = ${inspect(bulkOps, { depth: 3, compact: true })} )`);
+						{ insertOne: { document: bsDoc } }
+					 : 	{ updateOne: { filter: { _id: bsDoc._id }, update: { $set: bsDoc } } });
+					console.verbose(`[model ${model.modelName}].bulkWrite( [${bulkOps.length}] = ${inspect(bulkOps, { depth: 3, compact: true })}\nbs=${inspect(bulkOps, { depth: 5, compact: true })} )`);
 					model.bulkWrite(bulkOps).then(bulkWriteOpResult => {	//bsEntry.op)).then(bulkWriteOpResult => {
 						if (bulkWriteOpResult.result.ok) {
 							model._stats.bulkSave.success += bulkWriteOpResult.result.nModified;

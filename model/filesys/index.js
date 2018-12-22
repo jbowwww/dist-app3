@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../../stdio.js').Get('model/fs/filesys', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs/filesys', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -25,12 +25,10 @@ module.exports.iterate = function fsIterate(options, ...promisePipeFuncs) {
 		.then(searchRootDirDoc => searchRootDirDoc.save()).then(debug())
 		// .then(searchRootDirDoc => Artefact(searchRootDirDoc))
 		// .tap(a => console.verbose(`a=${inspect(a)}`))
-		.then(searchRootDirDoc => promisePipe(
-			iterate(search),
-			{ concurrency: options.concurency },			 //promisePipe({ concurrency: options.concurency },
-			fs => FsEntry.findOrCreate({ path: fs.path }, fs, { saveImmediate: fs.fileType === 'dir' || options.saveImmediate }),	//false }),
+		.then(searchRootDirDoc => promisePipe(iterate(search), { concurrency: options.concurency },
+			fs => FsEntry.findOrCreate({ path: fs.path }, fs, { saveImmediate: fs.fileType === 'dir' || options.saveImmediate }),
 			fs => Artefact(fs),
-			a => a.dir || options.saveImmediate ? a/*.save()*/ : a.bulkSave(),		// saves at least directories immediately, because files may reference them 
+			a => a.dir || options.saveImmediate ? a/*.save()*/ : a.bulkSave(),			// saves at least directories immediately, because files may reference them 
 			...promisePipeFuncs))
 		.then(debug('fsIterate(${inspect(search, {compact:true})}) return: '))))
 	.then(`Finished ${options.searches.length} searches`);

@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'log' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 const promisifyMethods = require('../utility.js').promisifyMethods;
 const _ = require('lodash');

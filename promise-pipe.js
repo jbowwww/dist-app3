@@ -1,7 +1,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'verbose' });	// verbose debug log
+const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'log' });	// verbose debug log
 const stream = require('stream');
 const _ = require('lodash');
 const inspect = require('util').inspect;

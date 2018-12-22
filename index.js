@@ -4,7 +4,7 @@
  */
 
 "use strict";
-const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q');
@@ -37,7 +37,11 @@ var searches = [
 var pipelines = {
 	debug: tap( a => {
 		var _a = (a.file||a.dir);
-		console.verbose(`bs_a=${_a.path} isNew=${_a.isNew} isModified=${_a.isModified()} modPaths=${_a.modifiedPaths()}`);
+		if (!_a) {
+			console.verbose(`\n!!\n\na = ${inspect(a)}\n\n!!\n`);
+		} else {
+			console.verbose(`bs_a=${_a.path} isNew=${_a.isNew} isModified=${_a.isModified()} modPaths=${_a.modifiedPaths()}`);
+		}
 	} ),
 	bulkSave: /*chainPromiseFuncs*/(
 		a => a.bulkSave() ),

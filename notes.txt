@@ -1,4 +1,8 @@
 
+181222
+Occasionally getting a mongodb  : no operation specified error - think its my recently modified bulkSave ending up with an empty array somehow - check concurrency issues
+
+
 181207
 Next step! - implement event/document create/update/check events as noted in model/plugin/timestamp.js (best place to do it):
 Actually - implement in standard.js - this is where it explicitly already calculates a var actionType (althgouh timestamps practivally does it again as well)
