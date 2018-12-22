@@ -33,32 +33,29 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				model._stats.bulkSave[actionType]++;
 				model._stats.bulkSave.calls++;
 				console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} model._bulkSaveDeferred=${model._bulkSaveDeferred?inspect(model._bulkSaveDeferred):'(undefined)'}`);
-				if (actionType === 'check') {
-					model._stats.bulkSave.success++;
-					return Q(doc);//(doc);
-				}// else if (actionType === 'created') {
-				
-				if (!model._bulkSaveDeferred) {
-					_.set(model, '_bulkSaveDeferred', Q.defer());
-				}
+				// if (actionType === 'check') {
+				// 	model._stats.bulkSave.success++;
+				// 	return Q(doc);//(doc);
+				// }
 				if (!model._bulkSave) {
 					model._bulkSave = [];
+					_.set(model, '_bulkSaveDeferred', Q.defer());
 				} else if (model._bulkSave.indexOf(doc) >= 0) {
 					console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} doc._id=${doc._id}: doc already queued for bulkWrite`);// (array index #${di}`);
 				} else {
-					model._bulkSave.push(_.set(doc.toObject(), '_actions', doc._actions));
+					model._bulkSave.push(/*_.set*/(doc/*.toObject(), '_actions', doc._actions*/));
 					if (model._bulkSave.length >= options.maxBatchSize) {
 						if (model._bulkSaveTimeout) {
 							clearTimeout(model._bulkSaveTimeout);
 							delete model._bulkSaveTimeout;
 						}
-						((bs, bsd) => process.nextTick(() => innerBulkSave(bs, bsd)))(_.slice(model._bulkSave), model._bulkSaveDeferred);
+						((bs, bsd) => /*process.nextTick(() => */innerBulkSave(bs, bsd))/*)*/(_.slice(model._bulkSave), model._bulkSaveDeferred);
 						model._bulkSave = [];
-						_.unset(model, '_bulkSaveDeferred');
+						_.set(model, '_bulkSaveDeferred', Q.defer());
 					} else if (!model._bulkSaveTimeout) {
-						
 						((bs, bsd) => setTimeout(() => innerBulkSave(bs, bsd), options.batchTimeout))(_.slice(model._bulkSave), model._bulkSaveDeferred);
-						
+						model._bulkSave = [];
+						_.set(model, '_bulkSaveDeferred', Q.defer());
 					}
 				}
 
@@ -68,9 +65,13 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				
 				// Perform actual bulk save
 				function innerBulkSave(bs, bsd) {
-					var bulkOps = _.map(bs, bsDoc => bsDoc._actions['bulkSave'] === 'create' ?
-						{ insertOne: { document: bsDoc } }
-					 : 	{ updateOne: { filter: { _id: bsDoc._id }, update: { $set: bsDoc } } });
+					var bulkOps = _.map(bs, bsDoc => ({ updateOne: { filter: { _id: bsDoc._doc._id }, update: { $set: bsDoc._doc }, upsert: true } }));
+					 // {
+						// console.verbose(`innerBulkSave: bs: bsDoc: bsDoc._doc._actions = ${inspect(bsDoc._doc._actions)} ${inspect(bsDoc, {compact:false, depth: 4})}`);
+						// return ((bsDoc._actions['bulkSave'] === 'create') ?
+						// { insertOne: { document: bsDoc._doc } }
+					 // : 	{ updateOne: { filter: { _id: bsDoc._doc._id }, update: { $set: bsDoc._doc } } }
+					 // ) });
 					console.verbose(`[model ${model.modelName}].bulkWrite( [${bulkOps.length}] = ${inspect(bulkOps, { depth: 3, compact: true })}\nbs=${inspect(bulkOps, { depth: 5, compact: true })} )`);
 					model.bulkWrite(bulkOps).then(bulkWriteOpResult => {	//bsEntry.op)).then(bulkWriteOpResult => {
 						if (bulkWriteOpResult.result.ok) {

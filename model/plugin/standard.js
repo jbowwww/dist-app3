@@ -203,7 +203,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 		return Q(model.findOne(query))
 		.then(r => r ? r.updateDocument(data) : model.construct(data))
-		.then(doc => _.set(doc, '_actions', {}))
+		// .then(doc => _.set(doc, '_actions', {}))
 		.then(doc => options.saveImmediate ? doc.save() : doc);
 	});
 

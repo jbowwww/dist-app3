@@ -4,7 +4,7 @@
  */
 
 "use strict";
-const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q');
@@ -29,81 +29,50 @@ process.on('beforeExit', () => {
 });
 
 var searches = [
-	{ path: '/mnt/Stor', maxDepth: 0 },
-	{ path: '/mnt/Storage', maxDepth: 0 }
+	// { path: '/mnt/Stor', maxDepth: 0 },
+	// { path: '/mnt/Storage', maxDepth: 0 },
+	// { path: '/media/jk/Backup '},
+	// { path: '/media/jk/My Passport', maxDepth: 0 },
+	// { path: '/media/jk/System Image1', maxDepth: 0 },
+	// { path: '/media/jk/PENDRIVE', maxDepth: 0 },
+	// { path: '/media/jk/MEDIA', maxDepth: 0 }
+	{ path: '/media/jk/MEDIA', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
 var pipelines = {
-	debug: tap( a => {
+	debug: tap(a => {
 		var _a = (a.file||a.dir);
 		if (!_a) {
 			console.verbose(`\n!!\n\na = ${inspect(a)}\n\n!!\n`);
 		} else {
 			console.verbose(`bs_a=${_a.path} isNew=${_a.isNew} isModified=${_a.isModified()} modPaths=${_a.modifiedPaths()}`);
 		}
-	} ),
-	bulkSave: /*chainPromiseFuncs*/(
-		a => a.bulkSave() ),
-	doHash: /*chainPromiseFuncs*/(
-		iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ) ),
-		///*tap( a => console.verbose(`a1=${inspect(a)}`) )*/ ),
-	doAudio: /*chainPromiseFuncs*/(
-		iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
-			iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
-			iff( a => !a.audio.isCheckedSince(a.file._ts.updated), a => a.audio.loadMetadata(a.file) ) ) )
-		///*tap( a => console.verbose(`a2=${inspect(a)}`) )*/ )	
+	}),
+	bulkSave: a => a.bulkSave(),
+	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
+	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
+		iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
+		iff( a => !a.audio.isCheckedSince(a.file._ts.updated), a => a.audio.loadMetadata(a.file) ) )
 }
-// File.on('post.bulkSave', onFileSave);
-// File.on('post.save', onFileSave);
-
-// function onFileSave(doc, next) {
-// 	console.log(`onFileSave`);
-// 	var model = doc.constructor;
-// 	var debugPrefix = `[model ${model.modelName}]`;//`[${typeof model} ${model.modelName}]`;
-// 	console.verbose(`${debugPrefix}.post('/(bulkS|s)?ave/'): doc=${inspect(doc)}`);
-// 	!doc.hash || doc.hashUpdated < doc._ts.checkedAt ? doc.doHash()
-//  : 	iff( a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio
-// 		// .catch(e => { console.warn(`${debugPrefix}.pre('validate'): error: ${err.stack||err}`); model._stats.errors.push(e); })
-// 	} else if { 
-// 		console.verbose(`${debugPrefix}.pre('validate'): doc.hash already current (=...${doc.hash.substr(-6)})`);
-// 		return Q(doc);
-// 	}
-// };
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
 .then(() => Disk.findOrPopulate()/*.catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`))*/)
 
 .then(() => FileSys.iterate({ searches },
-	pipelines.doHash,// pipelines.debug,
-	pipelines.doAudio,//, //pipelines.debug,
-	// a => a.save(),
 	pipelines.debug,
-	pipelines.bulkSave))//)/*pipelines.bulkSave*//*, pipelines.debug*/))//*.catch(err => console.warn(`fsIterate: ${err.stack||err}`))*/)
-// .then(() => Q.all(_.map(searches, search => promisePipe({ concurrency: 1 },
-// 	fsIterate(search),
-// 	tap( a => console.verbose(`a=${inspect(a)}`) )
-// 	))))
-// Artefact.find({
-// 	file: { hash: { $exists: false } },
+	pipelines.doHash,			// pipelines.debug,
+	pipelines.doAudio,			//pipelines.debug,
+	pipelines.debug,			// a => a.save(),
+	pipelines.bulkSave))
 
-// })
-// .then(() => File.find().getArtefacts().promisePipe(
-	// tap( a => console.verbose(`a=${inspect(a)}`) ),
-	// iff( a => !a.file.hash || !a.file.isCheckedSince(a.file.stats.mtime),	a => a.file.doHash() 				)	))
-
-// .then(() => File.find().getArtefacts().promisePipe(
-// 	iff( a => (/^.*\.(wav|mp3|au|flac)$/i).test(a.file.path) && !a.audio,	a => a.addMetaData('audio', {})		),
-// 	iff( a => a.audio && !a.audio.isCheckedSince(a.file.stats.mtime),		a => a.audio.loadMetadata(a.file) 	)	))
-
-// .tap(a => console.verbose(`a=${inspect(a)}`))
 .catch(err => console.warn(`Err: ${err.stack||err}`))
 
 /*.delay(1500)*/.then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.then(() => { console.log(`fsIterate: models[]._stats: ${/*_.values*/inspect(_.mapValues(mongoose.models, (model, modelName) => /*inspect*/(model._stats)), { compact: false })/*.join(",\n")*/}`); })
+.then(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}`); })
 
 .done();

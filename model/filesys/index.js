@@ -28,7 +28,7 @@ module.exports.iterate = function fsIterate(options, ...promisePipeFuncs) {
 		.then(searchRootDirDoc => promisePipe(iterate(search), { concurrency: options.concurency },
 			fs => FsEntry.findOrCreate({ path: fs.path }, fs, { saveImmediate: fs.fileType === 'dir' || options.saveImmediate }),
 			fs => Artefact(fs),
-			a => a.dir || options.saveImmediate ? a/*.save()*/ : a.bulkSave(),			// saves at least directories immediately, because files may reference them 
+			// a => a.dir || options.saveImmediate ? a/*.save()*/ : a.bulkSave(),			// saves at least directories immediately, because files may reference them 
 			...promisePipeFuncs))
 		.then(debug('fsIterate(${inspect(search, {compact:true})}) return: '))))
 	.then(`Finished ${options.searches.length} searches`);

@@ -10,4 +10,4 @@ let dirSchema = new mongoose.Schema({ });
 
 module.exports = FsEntry.discriminator('dir', dirSchema);
 
-console.verbose(`Dir: ${inspect(module.exports)}, Dir.prototype: ${inspect(module.exports.prototype)}`);
+console.debug(`Dir: ${inspect(module.exports)}, Dir.prototype: ${inspect(module.exports.prototype)}`);

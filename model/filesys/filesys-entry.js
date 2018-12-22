@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -50,15 +50,15 @@ fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
 fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
 
-fsEntry.post('init', function() {
-	const fs = this;
-	const model = this.constructor.baseModelName ? mongoose.model(this.constructor.baseModelName) : this.constructor;
-	const Dir = mongoose.model('dir');
-	const Partition = mongoose.model('partition');
-	const dirPath = nodePath.dirname(fs.path);
-	return fs.populate('dir', '-dir -partition').populate('partition').execPopulate()
-	.tap(() => console.verbose(`[model fsEntry ${model.modelName}].post('init'): fs.fileType=${fs.fileType} fs.path='${fs.path}'`));
-});
+// fsEntry.post('init', function() {
+// 	const fs = this;
+// 	const model = this.constructor.baseModelName ? mongoose.model(this.constructor.baseModelName) : this.constructor;
+// 	const Dir = mongoose.model('dir');
+// 	const Partition = mongoose.model('partition');
+// 	const dirPath = nodePath.dirname(fs.path);
+// 	return fs.populate('dir', '-dir -partition').populate('partition').execPopulate()
+// 	.tap(() => console.verbose(`[model fsEntry ${model.modelName}].post('init'): fs.fileType=${fs.fileType} fs.path='${fs.path}'`));
+// });
 
 
 fsEntry.post('construct', async function construct(fs) {

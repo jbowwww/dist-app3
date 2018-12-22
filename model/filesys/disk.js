@@ -71,4 +71,5 @@ disk.static('getPartitionForPath', function getPartitionForPath(path) {
 		return disk;
 	});
 })
+
 module.exports = mongoose.model('disk', disk);
