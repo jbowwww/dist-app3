@@ -48,18 +48,17 @@ fsEntry.plugin(customHooksPlugin);
 fsEntry.plugin(timestampPlugin);
 fsEntry.plugin(standardPlugin);
 fsEntry.plugin(bulkSavePlugin);
+fsEntry.plugin(statPlugin, { data: { save: {}, validate: {} } });
 
-fsEntry.pre('find', function() {
-	const fs = this;
-	const model = this.constructor.baseModelName ? mongoose.model(this.constructor.baseModelName) : this.constructor;
-	const Dir = mongoose.model('dir');
-	const Partition = mongoose.model('partition');
-	const dirPath = nodePath.dirname(fs.path);
-	return fs.populate('dir'/*, '-dir -partition'*/)
-	.populate('partition')
-	// .execPopulate()	// not used because it is pre
-	.tap(() => console.verbose(`[model fsEntry ${model.modelName}].pre('find'): fs.fileType=${fs.fileType} fs.path='${fs.path}'`));
-});
+// fsEntry.post('init', function() {
+// 	const fs = this;
+// 	const model = this.constructor.baseModelName ? mongoose.model(this.constructor.baseModelName) : this.constructor;
+// 	const Dir = mongoose.model('dir');
+// 	const Partition = mongoose.model('partition');
+// 	const dirPath = nodePath.dirname(fs.path);
+// 	return fs.populate('dir', '-dir -partition').populate('partition').execPopulate()
+// 	.tap(() => console.verbose(`[model fsEntry ${model.modelName}].post('init'): fs.fileType=${fs.fileType} fs.path='${fs.path}'`));
+// });
 
 
 fsEntry.post('construct', async function construct(fs) {

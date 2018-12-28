@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -14,7 +14,7 @@ let file = new mongoose.Schema({
 	hashUpdated: { type: Date, /*default: 0,*/ required: false }
 });
 
-// file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
+file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
 
 
 // file.post('save', async function() {
