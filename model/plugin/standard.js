@@ -9,29 +9,13 @@ const { promisePipe, artefactDataPipe, chainPromiseFuncs } = require('../../prom
 const statPlugin = require('./stat.js');
 const Artefact = require('../../Artefact.js');
 
-const trackedMethods = ['validate', 'save', 'bulkSave'/*, 'find'*/];
+const trackedMethods = ['validate', 'save'/*, 'bulkSave', 'find'*/];
 
 /* Standard/common schema methods, statics
  */
 module.exports = function standardSchemaPlugin(schema, options) {
-
-	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
-	schema.plugin(statPlugin, {
-		data: _.fromPairs(_.map(trackedMethods, methodName => ([methodName, {}])))
-		// {
-		// 	// 'save' property is added on by the schema plugin itself
-		// 	validate: {},
-		// 	construct: {},
-		// 	bulkSave: {},
-		// 	// 	items: {
-		// 	// 		insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
-		// 	// 		get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
-		// 	// 		// toString() { return util.inspect(this, { compact: true }); }
-		// 	// 	}
-		// 	// }
-		// }
-	});
+	schema.plugin(statPlugin, trackedMethods);
 
 /*
 	schema.pre('validate', function(next) {
@@ -95,49 +79,51 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 */
 
-	schema.static('construct', function construct(data, cb) {
-		return Q(new (this)(data));
-	});
 
 // would use a regex to match everything but i can't see any way to then get the actual event name??
 //add more as they become useful. I'm not sure save/bulkSave are very useful because of mongoose not firing middleware from it's bulkSave and me doing it custom
-	_.forEach(trackedMethods, methodName => {
+	// _.forEach(trackedMethods, methodName => {
 		
-		schema.pre(methodName, function(next) {
-			var doc = this;
-			var model = this.constructor;
-			var eventName = 'pre.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			var actionType = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
-			if (!doc._actions) {
-				_.set(doc, '_actions', {});
-			}
-			doc._actions[methodName] = actionType;
-			model._stats[methodName]/*[actionType]*/.calls++;
-			model._stats[methodName][actionType]++;
-			console.verbose(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);// args=${inspect(args)} ${args.length}`);
-			next();
-		});
+		// schema.pre(methodName, function(next) {
+		// 	var doc = this;
+		// 	var model = this.constructor;
+		// 	var eventName = 'pre.' + methodName;
+		// 	model.emit(eventName, doc);
+		// 	doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+		// 	var actionType = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
+		// 	if (!doc._actions) {
+		// 		_.set(doc, '_actions', {});
+		// 	}
+		// 	doc._actions[methodName] = actionType;
+		// 	model._stats[methodName]/*[actionType]*/.calls++;
+		// 	model._stats[methodName][actionType]++;
+		// 	console.verbose(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);// args=${inspect(args)} ${args.length}`);
+		// 	next();
+		// });
 
-		schema.post(methodName, function(/*err,*/ res, next) {
-			// console.verbose(`post ${methodName}: doc=${inspect(doc)} next=${next}`);
-			var doc = this;
-			var model = this.constructor;
-			var actionType = doc._actions[methodName];
-			doc._actions[methodName] = null;
-						// if (err) {
-			// 	console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
-			// 	return model._stats[methodName][actionType].errors.push(err);				
-			// }
-			console.verbose(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);// args=${inspect(args)} ${args.length}`);
-			var eventName = 'post.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			model._stats[methodName]/*[actionType]*/.success++;
-			next();
-		});
+		// schema.post(methodName, function(/*err,*/ res, next) {
+		// 	// console.verbose(`post ${methodName}: doc=${inspect(doc)} next=${next}`);
+		// 	var doc = this;
+		// 	var model = this.constructor;
+		// 	var actionType = doc._actions[methodName];
+		// 	doc._actions[methodName] = null;
+		// 				// if (err) {
+		// 	// 	console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
+		// 	// 	return model._stats[methodName][actionType].errors.push(err);				
+		// 	// }
+		// 	console.verbose(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);// args=${inspect(args)} ${args.length}`);
+		// 	var eventName = 'post.' + methodName;
+		// 	model.emit(eventName, doc);
+		// 	doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+		// 	model._stats[methodName]/*[actionType]*/.success++;
+		// 	next();
+		// });
 
+	// });
+
+
+	schema.static('construct', function construct(data, cb) {
+		return Q(new (this)(data));
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,

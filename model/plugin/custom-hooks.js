@@ -11,8 +11,6 @@ const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js')
  */
 module.exports = function customHooksSchemaPlugin(schema, options) {
 
-	console.debug(`customHooksSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
-
 	// const mongooseSchemaStatic = mongoose.Schema.prototype.static;//.bind(mongoose.Schema.prototype);
 	_.set(schema, 'static', function mongoose_schema_static(name, fn) {
 		if (!_.isString(name)) {

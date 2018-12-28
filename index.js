@@ -36,7 +36,7 @@ var searches = [
 	// { path: '/media/jk/System Image1', maxDepth: 0 },
 	// { path: '/media/jk/PENDRIVE', maxDepth: 0 },
 	// { path: '/media/jk/MEDIA', maxDepth: 0 }
-	{ path: '/media/jk/MEDIA', maxDepth: 1 }
+	{ path: '/home/jk/code', maxDepth: 3 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -69,7 +69,7 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 .catch(err => console.warn(`Err: ${err.stack||err}`))
 
-/*.delay(1500)*/.then(() => mongoose.connection.close()
+.delay(1500).then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
