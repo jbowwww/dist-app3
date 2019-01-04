@@ -31,12 +31,13 @@ process.on('beforeExit', () => {
 var searches = [
 	// { path: '/mnt/Stor', maxDepth: 0 },
 	// { path: '/mnt/Storage', maxDepth: 0 },
-	// { path: '/media/jk/Backup '},
+	{ path: '/media/jk/Backup/RECOVERED_FILES/mystuff/Backup', maxDepth: 0 },
 	// { path: '/media/jk/My Passport', maxDepth: 0 },
 	// { path: '/media/jk/System Image1', maxDepth: 0 },
-	// { path: '/media/jk/PENDRIVE', maxDepth: 0 },
+	// { path: '/media/jsk/PENDRIVE', maxDepth: 0 },
 	// { path: '/media/jk/MEDIA', maxDepth: 0 }
-	{ path: '/media/jk/MEDIA', maxDepth: 1 }
+	// { path: '/media/jk/MEDIA', maxDepth: 1 }
+	// { path: '/home/jk', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -61,15 +62,16 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 .then(() => Disk.findOrPopulate()/*.catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`))*/)
 
 .then(() => FileSys.iterate({ searches },
-	pipelines.debug,
+	// pipelines.debug,
 	pipelines.doHash,			// pipelines.debug,
 	pipelines.doAudio,			//pipelines.debug,
-	pipelines.debug,			// a => a.save(),
+	// pipelines.debug,			// a => a.save(),
 	pipelines.bulkSave))
 
 .catch(err => console.warn(`Err: ${err.stack||err}`))
 
-/*.delay(1500)*/.then(() => mongoose.connection.close()
+/*.delay(1500)*/.then(Q.all(_.map(mongoose.models, m => m._bulkSaveDeferredCurrent)))
+.then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 

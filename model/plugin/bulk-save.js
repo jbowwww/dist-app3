@@ -49,11 +49,17 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 							clearTimeout(model._bulkSaveTimeout);
 							delete model._bulkSaveTimeout;
 						}
-						((bs, bsd) => /*process.nextTick(() => */innerBulkSave(bs, bsd))/*)*/(_.slice(model._bulkSave), model._bulkSaveDeferred);
+						((bs, bsd) => {
+							model._bulkSaveDeferredCurrent = (model._bulkSaveDeferredCurrent ? model._bulkSaveDeferredCurrent : Q()).then(bsd);
+							/*process.nextTick(() => */innerBulkSave(bs, bsd);
+						})/*)*/(_.slice(model._bulkSave), model._bulkSaveDeferred);
 						model._bulkSave = [];
 						_.set(model, '_bulkSaveDeferred', Q.defer());
 					} else if (!model._bulkSaveTimeout) {
-						((bs, bsd) => setTimeout(() => innerBulkSave(bs, bsd), options.batchTimeout))(_.slice(model._bulkSave), model._bulkSaveDeferred);
+						((bs, bsd) =>  {
+							model._bulkSaveDeferredCurrent = (model._bulkSaveDeferredCurrent ? model._bulkSaveDeferredCurrent : Q()).then(bsd);
+							model._bulkSaveTimeout = setTimeout(() => innerBulkSave(bs, bsd), options.batchTimeout);
+						})(_.slice(model._bulkSave), model._bulkSaveDeferred);
 						model._bulkSave = [];
 						_.set(model, '_bulkSaveDeferred', Q.defer());
 					}

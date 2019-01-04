@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -66,7 +66,7 @@ fsEntry.post('construct', async function construct(fs) {
 	const Dir = mongoose.model('dir');
 	const Partition = mongoose.model('partition');
 	const dirPath = fs.dir ? fs.dir.path : nodePath.dirname(fs.path);
-	console.verbose(`[model ${model.modelName}].post('construct'): path='${inspect(fs)}' dirPath=${dirPath}`);
+	console.verbose(`[model ${model.modelName}].post('construct'): fs=${inspect(fs)} dirPath=${dirPath}`);
 
 	try {
 		if (dirPath === fs.path) {
@@ -82,7 +82,6 @@ fsEntry.post('construct', async function construct(fs) {
 				return fs;
 			});
 		}
-		console.verbose(`[model ${model.modelName}].post('construct'): fs=${inspect(fs)}`)
 	} catch(err) {
 		model._stats.errors.push(err);
 		console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);

@@ -8,9 +8,8 @@ const nodeFs = promisifyMethods(require('fs'));
 const nodePath = require('path');
 const Q = require('q');
 Q.longStackSupport = true;
-
+const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, ifPipe, conditionalTap, streamPromise }  = require('../promise-pipe.js');
 const getDevices = require('./devices.js');
-
 const pathDepth = require('./path-depth.js');
 
 // creates a POJO FS item to be used by iterate. Takes a path and returns an object containing path, stats, and fileType
@@ -41,29 +40,18 @@ module.exports = {
 				console.warn(`iterate: ${err.stack||err}`);
 			}
 		});
-
 		var path = nodePath.resolve(options.path);
 		console.verbose(`iterate('${path}', ${inspect(options)})`);
 	  	
-	  	var drive;/*
-		getDevices().then(drives => {
-	  		drive = _.find(_.sortBy(_.filter(drives,
-		  			drive => typeof drive.mountpoint === 'string'),
-		  		drive => drive.mountpoint.length ),
-		  	drive => path.startsWith(drive.mountpoint));
-		  	console.verbose(`iterate('${path}'): drive=${inspect(drive)}`);
-	  	});*/
-
 		var self = _.extend({
 			root: path,
 			rootDepth: pathDepth(path),
 			paths: [path],
 			errors: []
 		}, new require('stream').Readable({
-
 			objectMode: true,
-
 			read: function (size) {
+
 				return (function next() {
 					if (!self.paths.length) {
 						if (self.errors.length) {
@@ -93,19 +81,22 @@ module.exports = {
 						options.handleError(err);
 						self.errors.push(err);
 						// process.nextTick(() =>
-						 self.emit('error', err);
+						 // self.emit('error', err);
 						 // );
 						return next();//1;
 					}
 
 				})();
 			}
-
-		}))
+		}), {
+			promisePipe(...args) {
+				return promisePipe(...args);
+			}
+		})
 
 		.on('close', (...args) => console.verbose(`iterate: close: ${inspect(args)}`))
 		.on('end', (...args) => console.verbose(`iterate: end: ${inspect(args)}`))
-		.on('error', (err, ...args) => console.warn(`iterate: err: ${err.stack||err} ${inspect(args)}`))
+		.on('error', (err, ...args) => console.warn(`iterate: err: ${err} ${inspect(args)}`))
 		
 		return self;
 	}
