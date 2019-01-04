@@ -90,7 +90,7 @@ module.exports = {
 			}
 		}), {
 			promisePipe(...args) {
-				return promisePipe(...args);
+				return promisePipe(self, ...args);
 			}
 		})
 

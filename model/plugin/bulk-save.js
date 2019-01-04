@@ -30,8 +30,8 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				
 				// insert, update, or do nothing depending if the doc is new, updated or unmodified
 				var actionType = doc._actions['bulkSave'];//doc.isNew ? 'created' : /*doc._id !== null && */doc.isModified() ? 'updated' : 'checked';
-				model._stats.bulkSave[actionType]++;
-				model._stats.bulkSave.calls++;
+				// model._stats.bulkSave[actionType]++;
+				// model._stats.bulkSave.calls++;
 				console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} model._bulkSaveDeferred=${model._bulkSaveDeferred?inspect(model._bulkSaveDeferred):'(undefined)'}`);
 				// if (actionType === 'check') {
 				// 	model._stats.bulkSave.success++;

@@ -17,6 +17,8 @@ const { Disk, FsEntry, File, Dir } = FileSys;
 const Audio = require('./model/audio.js');
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('./promise-pipe.js');
 
+const Artefact = require('./Artefact.js');
+
 var errors = [];
 process.on('uncaughtException', (err) => {
   fs.writeSync(1, `process.on('uncaughtException'): ${err.stack||err}\n`);
@@ -61,7 +63,9 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 .then(() => Disk.findOrPopulate()/*.catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`))*/)
 
-.then(() => FileSys.iterate({ searches },
+.then(() => fsIterate({ searches }).promisePipe(
+	f => FsEntry.findOrCreate({ path: f.path }, f),
+	f => Artefact(f),
 	// pipelines.debug,
 	pipelines.doHash,			// pipelines.debug,
 	pipelines.doAudio,			//pipelines.debug,
@@ -70,7 +74,10 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 .catch(err => console.warn(`Err: ${err.stack||err}`))
 
-/*.delay(1500)*/.then(Q.all(_.map(mongoose.models, m => m._bulkSaveDeferredCurrent)))
+.delay(1500)
+.then(() => { console.verbose(`mongoose.models count=${_.keys(mongoose.connection.models).length} names=${mongoose.connection.modelNames().join(', ')}`); })
+.then(Q.all(_.map(mongoose.connection.models, m => m._bulkSaveDeferredCurrent))
+	.then(bulkSaveDeferreds => { console.verbose(`mongoose bulkSaveDeferreds.length=${bulkSaveDeferreds.length}`); }))
 .then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))

@@ -25,7 +25,7 @@ var self = {
 	 *	options.enableStreamErrors: (default: false) whether exceptions/promise rejections in the promiseFunctions pipeline get emitted on the emitter as an 'error' event
 	 */
 	promisePipe(...args) { //sourceStream, ...promiseFunctions/*, options = {}*/) {
-		var sourceStream, options, promiseFunctions = [];
+		var sourceStream, options = {}, promiseFunctions = [];
 
 		_.forEach(args, (arg, i) => {
 			if (typeof arg === 'object') {

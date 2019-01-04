@@ -130,14 +130,31 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			// 	console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
 			// 	return model._stats[methodName][actionType].errors.push(err);				
 			// }
-			console.verbose(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);// args=${inspect(args)} ${args.length}`);
 			var eventName = 'post.' + methodName;
 			model.emit(eventName, doc);
 			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			model._stats[methodName]/*[actionType]*/.success++;
+			console.verbose(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);//  doc._actions=${inspect(doc._actions)}
 			next();
 		});
 
+		schema.post(methodName, function(err, res, next) {
+			// console.verbose(`post ${methodName}: doc=${inspect(doc)} next=${next}`);
+			var doc = this;
+			var model = this.constructor;
+			var actionType = doc._actions[methodName];
+			doc._actions[methodName] = null;
+						// if (err) {
+			// 	console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
+			// 	return model._stats[methodName][actionType].errors.push(err);				
+			// }
+			var eventName = 'err.' + methodName;
+			model.emit(eventName, doc);
+			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			model._stats[methodName]/*[actionType]*/.errors.push(err);
+			console.verbose(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);//  doc._actions=${inspect(doc._actions)}
+			next();
+		});
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
