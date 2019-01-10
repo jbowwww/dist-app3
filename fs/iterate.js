@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'log' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 const promisifyMethods = require('../utility.js').promisifyMethods;
 const _ = require('lodash');
@@ -19,10 +19,15 @@ module.exports = {
 
 	function createFsItem(path) {
 		return nodeFs.lstat(path).then(stats => ({
-			path,
+			path: /*nodePath.resolve*/(path),
 			stats,
 			get fileType() { return stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'; },
-			get pathDepth() { return pathDepth(this.path); }
+			get pathDepth() { return this.path.split(nodePath.sep).length - 1; },
+			get extension() {
+				var n = this.path.lastIndexOf('.');
+				var n2 = Math.max(this.path.lastIndexOf('/'), this.path.lastIndexOf('\\'));
+				return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
+			}
 		}));
 	};
 	
@@ -45,7 +50,7 @@ module.exports = {
 	  	
 		var self = _.extend({
 			root: path,
-			rootDepth: pathDepth(path),
+			rootDepth: path.split(nodePath.sep).length - 1,
 			paths: [path],
 			errors: []
 		}, new require('stream').Readable({
@@ -64,16 +69,18 @@ module.exports = {
 					}
 					
 					createFsItem(self.paths[options.queueMethod]()).then(item => {
-						var currentDepth = item.pathDepth - self.rootDepth + 1;	// +1 because below here next files are read from this dir
-						if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth)) && (!options.filter || options.filter(item))) {
-							nodeFs.readdir(item.path).then(names => {
-								// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
-								console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}]`);
-								_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
+						if (!options.filter || options.filter(item)) {
+							var currentDepth = item.pathDepth; - self.rootDepth;	// +1 because below here next files are read from this dir
+							if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootDepth))/* && (!options.filter || options.filter(item))*/) {
+								nodeFs.readdir(item.path).then(names => {
+									// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
+									console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
+									_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
+									/*return*/ self.push(item);
+								}).catch(err => nextHandleError(err));
+							} else {
 								/*return*/ self.push(item);
-							}).catch(err => nextHandleError(err));
-						} else {
-							/*return*/ self.push(item);
+							}
 						}
 					}).catch(err => nextHandleError(err));
 

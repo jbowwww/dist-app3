@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -7,7 +7,7 @@ const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-const FsEntry = require('./filesys-entry.js');
+const FsEntry = mongoose.model('fs'); require('./filesys-entry.js');
 
 let file = new mongoose.Schema({
 	hash: { type: String, /*default: '',*/ required: false },

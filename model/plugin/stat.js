@@ -1,15 +1,16 @@
 "use strict";
 const console = require('../../stdio.js').Get('model/plugin/stat', { minLevel: 'log' });	// log verbose debug
+const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const _ = require('lodash');
 
 module.exports = function statSchemaPlugin(schema, options) {
-	options = _.defaults(options, { data: { save: {}, validate: {} } });
+
+	console.debug(`statSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+
+	options = _.merge({ data: { save: {}, validate: {} } }, options);
 	if (schema._stats === undefined) {
 		Object.defineProperty(schema, '_stats', { enumerable: true, writeable: true, configurable: true, value: { } });
-	}
-	if (!options.data) {
-		throw new TypeError(`options.data must define properties for each piece of _stats data, optionally setting value to be extra/custom properties`);
 	}
 	_.assign(schema._stats, options.data);
 	schema.on('init', model => {
@@ -34,4 +35,5 @@ module.exports = function statSchemaPlugin(schema, options) {
 		}
 		console.debug(`schema.on('init'): model=${util.inspect(model)}`);
 	});
+
 };

@@ -24,7 +24,7 @@ var self = {
 	 *	promiseFunctions: An array of promise-returning functions that take one parameter (data), which will be chained together and called as data arrives
 	 *	options.enableStreamErrors: (default: false) whether exceptions/promise rejections in the promiseFunctions pipeline get emitted on the emitter as an 'error' event
 	 */
-	promisePipe(...args) { //sourceStream, ...promiseFunctions/*, options = {}*/) {
+	promisePipe(...args) { //sourceStream, [, options = {}], ...promiseFunctions) {
 		var sourceStream, options = {}, promiseFunctions = [];
 
 		_.forEach(args, (arg, i) => {
@@ -143,7 +143,7 @@ var self = {
 				 return newData;
 			})
 			.catch(err => {
-				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: data });
+				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: _.clone(data) });
 				if (options.catchErrors && typeof options.catchErrors === 'function') {
 					options.catchErrors(err);
 				}

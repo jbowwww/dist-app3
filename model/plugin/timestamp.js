@@ -1,12 +1,14 @@
 "use strict";
 
 const console = require('../../stdio.js').Get('model/plugin/timestamp', { minLevel: 'log' });	// log verbose debug
-// const inspect = require('./utility.js').makeInspect({ depth: 2, compact: true /* false */ });
-const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
+const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
 
 module.exports = function timestampSchemaPlugin(schema, options) {
+	
+	console.debug(`timestampSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+
 	schema.add({
 		_ts: {
 		createdAt: { type: Date, required: true/*, default: () => Date.now()*/ },
@@ -15,28 +17,22 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		deletedAt: { type: Date, required: false }
 	} });
 
-	schema.pre('validate', function(next) {
-		var model = this.constructor;
-		if (!this._ts.createdAt && !this.isNew) {
-			return next(new Error(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: !doc._ts.createdAt !this.isNew ${this.isModified()?'':'!'}this.isModified()`));
-		} else if (this._ts.created && this.isNew) {
-			return next(new Error(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: doc._ts.createdAt && this.isNew ${this.isModified()?'':'!'}this.isModified()`));
+	schema.post('validate', function(doc, next) {
+		var model = doc.constructor;
+		if (!doc._ts.createdAt && !doc.isNew) {
+			return next(new Error(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: !doc._ts.createdAt !doc.isNew ${doc.isModified()?'':'!'}doc.isModified()`));
+		} else if (doc._ts.created && doc.isNew) {
+			return next(new Error(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: doc._ts.createdAt && doc.isNew ${doc.isModified()?'':'!'}doc.isModified()`));
 		}
 		var now = Date.now();
-		/* `181207: New idea: at this point the plugin emits an event on the model (i think it is alreaaay an Eventemitter) and 
-		/& the document (also an EE i think, or make it one) named either create, update or check.
-		 * Other schemas can listen fofr these events on a model or on specific documents without having to use schema middleware directly 
-		 * Allows for eg/ : files can listen for their own creation/updates and (re)calculate hash as appropriate
-		 * 	: audio can listen for file creaete/update and load metadata appropriately
-		 * Seems generic enough for what ineed?? */
-		if (this.isNew) {
-			this._ts.createdAt = this._ts.updatedAt = this._ts.checkedAt = now;
-		} else if (this.isModified()) {
-			this._ts.updatedAt = this._ts.checkedAt = now;
-		} else if (!this._ts.updatedAt) {
-			this._ts.checkedAt = now;
+		if (doc.isNew) {
+			doc._ts.createdAt = doc._ts.updatedAt = doc._ts.checkedAt = now;
+		} else if (doc.isModified()) {
+			doc._ts.updatedAt = doc._ts.checkedAt = now;
+		} else if (!doc._ts.updatedAt) {
+			doc._ts.checkedAt = now;
 		}
-		console.verbose(`[model ${model.modelName}].pre('validate')#timestampSchemaPlugin: isNew=${this.isNew} ${this.modifiedPaths().join(' ')}`); //this=${inspectPretty(this.schema)} parent=${inspectPretty(this.$parent)}`);
+		console.verbose(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: isNew=${doc.isNew} ${doc.modifiedPaths().join(' ')}`);
 		return next();
 	});
 

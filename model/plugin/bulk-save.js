@@ -9,7 +9,8 @@ const mongoose = require('mongoose');
 mongoose.Promise = Q.Promise;
 
 module.exports = function bulkSaveSchemaPlugin(schema, options) {
-		
+	schema.plugin(require('./stat.js'), { data: { bulkSave: {} } });
+
 	/* 181222: Note: Don't use bulkSave (at least currently) in a promisePipe unless it is at the END or at the END of a tap chain
 	 * Because currently it returns a bulkwriteopresult and not the document (unless the doc is unmodified requiring no save, then it returns a doc
 	 */
@@ -42,32 +43,41 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 					_.set(model, '_bulkSaveDeferred', Q.defer());
 				} else if (model._bulkSave.indexOf(doc) >= 0) {
 					console.verbose(`[model ${model.modelName}].bulkSave action=${actionType} doc._id=${doc._id}: doc already queued for bulkWrite`);// (array index #${di}`);
-				} else {
-					model._bulkSave.push(/*_.set*/(doc/*.toObject(), '_actions', doc._actions*/));
-					if (model._bulkSave.length >= options.maxBatchSize) {
-						if (model._bulkSaveTimeout) {
-							clearTimeout(model._bulkSaveTimeout);
-							delete model._bulkSaveTimeout;
-						}
-						((bs, bsd) => {
-							model._bulkSaveDeferredCurrent = (model._bulkSaveDeferredCurrent ? model._bulkSaveDeferredCurrent : Q()).then(bsd);
-							/*process.nextTick(() => */innerBulkSave(bs, bsd);
-						})/*)*/(_.slice(model._bulkSave), model._bulkSaveDeferred);
-						model._bulkSave = [];
-						_.set(model, '_bulkSaveDeferred', Q.defer());
-					} else if (!model._bulkSaveTimeout) {
-						((bs, bsd) =>  {
-							model._bulkSaveDeferredCurrent = (model._bulkSaveDeferredCurrent ? model._bulkSaveDeferredCurrent : Q()).then(bsd);
-							model._bulkSaveTimeout = setTimeout(() => innerBulkSave(bs, bsd), options.batchTimeout);
-						})(_.slice(model._bulkSave), model._bulkSaveDeferred);
-						model._bulkSave = [];
-						_.set(model, '_bulkSaveDeferred', Q.defer());
-					}
+					return Q(doc);
 				}
 
+				model._bulkSave.push(/*_.set*/(doc/*.toObject(), '_actions', doc._actions*/));
+				if (model._bulkSave.length >= options.maxBatchSize) {
+					if (model._bulkSaveTimeout) {
+						clearTimeout(model._bulkSaveTimeout);
+						delete model._bulkSaveTimeout;
+					}
+					((bs, bsd) => {
+						// model._bulkSaveDeferredCurrent = (model._bulkSaveDeferredCurrent ? model._bulkSaveDeferredCurrent : Q()).then(bsd);
+						/*process.nextTick(() => */innerBulkSave(bs, bsd);
+					})/*)*/(_.slice(model._bulkSave), model._bulkSaveDeferred);
+					var ret = model._bulkSaveDeferred.promise;
+					model._bulkSave = [];
+					_.set(model, '_bulkSaveDeferred', Q.defer());
+					_.set(model, '_bulkSaveDeferredAccum', (model._bulkSaveDeferredAccum ? model._bulkSaveDeferredAccum : Q()).then(ret));
+					return ret;
+				} else if (!model._bulkSaveTimeout) {
+					((bs, bsd) =>  {
+						// model._bulkSaveDeferredCurrent = (model._bulkSaveDeferredCurrent ? model._bulkSaveDeferredCurrent : Q()).then(bsd);
+						model._bulkSaveTimeout = setTimeout(() => innerBulkSave(bs, bsd), options.batchTimeout);
+					})(_.slice(model._bulkSave), model._bulkSaveDeferred);
+					var ret = model._bulkSaveDeferred.promise;
+					model._bulkSave = [];
+					_.set(model, '_bulkSaveDeferred', Q.defer());
+					_.set(model, '_bulkSaveDeferredAccum', (model._bulkSaveDeferredAccum ? model._bulkSaveDeferredAccum : Q()).then(ret));
+					return ret;
+				} else {
+					return model._bulkSaveDeferred.promise;
+				}
+			
 				// resolves the return promise with the document queued for bulk writing, although it is not written yet
 				// resolve(doc);
-				return Q(doc);//model._bulkSaveDeferred.promise;
+				// return Q(doc);//model._bulkSaveDeferred.promise;
 				
 				// Perform actual bulk save
 				function innerBulkSave(bs, bsd) {
@@ -114,4 +124,22 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 
 	});
 
+	schema.pre('bulkSave', function() {
+		var model = this.constructor;
+		var doc = this;
+
+		options = _.assign({
+			maxBatchSize: 10,
+			batchTimeout: 750
+		}, options);
+
+		console.verbose(`[model ${model.modelName}].pre('bulkSave'): options=${inspect(options)} isNew=${doc.isNew} isModified()=${doc.isModified()} modifiedPaths=${doc.modifiedPaths()}`);
+
+		model._stats.bulkSave.calls++;
+		var actionType = doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check';
+		doc._actions = _.merge(doc._actions || {}, { bulkSave: actionType });
+		model._stats.bulkSave[actionType]++;
+	})
+
+	// schema.post('bulkSave')
 };

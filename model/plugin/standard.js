@@ -5,34 +5,19 @@ const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-const { promisePipe, artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
-const statPlugin = require('./stat.js');
 const Artefact = require('../../Artefact.js');
 
-const trackedMethods = ['validate', 'save', 'bulkSave'/*, 'find'*/];
+const statPlugin = require('./stat.js');
+const trackedMethods = ['validate', 'save'/*, 'bulkSave'*//*, 'find'*/];
 
 /* Standard/common schema methods, statics
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
+console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFindQuery'))}`);
+
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
-	schema.plugin(statPlugin, {
-		data: _.fromPairs(_.map(trackedMethods, methodName => ([methodName, {}])))
-		// {
-		// 	// 'save' property is added on by the schema plugin itself
-		// 	validate: {},
-		// 	construct: {},
-		// 	bulkSave: {},
-		// 	// 	items: {
-		// 	// 		insertOne: 0, updateOne: 0, insertMany: 0, updateMany: 0, unmodified: 0,
-		// 	// 		get total() { return this.insertOne + this.updateOne + this.insertMany + this.updateMany + this.unmodified/* + this.inserts + this.updates*/; }
-		// 	// 		// toString() { return util.inspect(this, { compact: true }); }
-		// 	// 	}
-		// 	// }
-		// }
-	});
-
 /*
 	schema.pre('validate', function(next) {
 		var model = this.constructor;
@@ -96,11 +81,14 @@ module.exports = function standardSchemaPlugin(schema, options) {
 */
 
 	schema.static('construct', function construct(data, cb) {
-		return Q(new (this)(data));
+		return Q(new (this)(_.assign(data, { _ts: { createdAt: Date.now() } })));
 	});
 
-// would use a regex to match everything but i can't see any way to then get the actual event name??
-//add more as they become useful. I'm not sure save/bulkSave are very useful because of mongoose not firing middleware from it's bulkSave and me doing it custom
+	schema.plugin(statPlugin, { data: _.fromPairs(_.map(trackedMethods, methodName => ([methodName, {}]))) });
+
+	/* would use a regex to match everything but i can't see any way to then get the actual event name??
+	 * add more as they become useful. I'm not sure save/bulkSave are very useful because of mongoose not firing middleware from it's bulkSave and me doing it custom
+	 */
 	_.forEach(trackedMethods, methodName => {
 		
 		schema.pre(methodName, function(next) {
@@ -116,44 +104,38 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			doc._actions[methodName] = actionType;
 			model._stats[methodName]/*[actionType]*/.calls++;
 			model._stats[methodName][actionType]++;
-			console.verbose(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);// args=${inspect(args)} ${args.length}`);
+			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
 
-		schema.post(methodName, function(/*err,*/ res, next) {
-			// console.verbose(`post ${methodName}: doc=${inspect(doc)} next=${next}`);
+		schema.post(methodName, function(res, next) {
 			var doc = this;
-			var model = this.constructor;
+			var model = doc.constructor;
 			var actionType = doc._actions[methodName];
 			doc._actions[methodName] = null;
-						// if (err) {
-			// 	console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
-			// 	return model._stats[methodName][actionType].errors.push(err);				
-			// }
 			var eventName = 'post.' + methodName;
 			model.emit(eventName, doc);
 			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			model._stats[methodName]/*[actionType]*/.success++;
-			console.verbose(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);//  doc._actions=${inspect(doc._actions)}
+			console.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
 
 		schema.post(methodName, function(err, res, next) {
-			// console.verbose(`post ${methodName}: doc=${inspect(doc)} next=${next}`);
 			var doc = this;
-			var model = this.constructor;
+			var model = doc.constructor;
 			var actionType = doc._actions[methodName];
-			doc._actions[methodName] = null;
-						// if (err) {
-			// 	console.warn(`${debugPrefix}.post('${methodName}'): error: ${err.stack||err}`);
-			// 	return model._stats[methodName][actionType].errors.push(err);				
-			// }
 			var eventName = 'err.' + methodName;
 			model.emit(eventName, doc);
 			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			model._stats[methodName]/*[actionType]*/.errors.push(err);
-			console.verbose(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);//  doc._actions=${inspect(doc._actions)}
-			next();
+			if (err) {
+				model._stats[methodName].errors.push(err);
+				console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
+				return next(err);
+			} else {
+				console.debug(`[doc ${model.modelName}].post('${methodName}') Succ: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
+				return next();
+			}
 		});
 	});
 
@@ -195,192 +177,49 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * !! Hold on - the use case here for Audio is different to File. Even if a File is found this method still does updateDocument(data),
 	 * whereas with Audio I think I just want to skip it completley - unless the file has changed more recently than the Audio document was updated/checked 
 	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... */
-	schema.static('findOrCreate', function findOrCreate(query, data, options, cb) {
-		const defaultOptions = {
-			saveImmediate: false		// if true, calls doc.save() immediately after creation or after finding the doc 
-		};
-		if (!_.isPlainObject(query)) {
-			throw new TypeError(`query must be a plain object, but query=${inspect(query)}`);
-		} else if (typeof data === 'function' && !options && !cb) {
-			cb = data;
-			data = query;
-			options = defaultOptions;
-		} else if (!data) {
-			data = query;
-			options = defaultOptions;
-		} else if (typeof options === 'function') {
-			cb = options;
-			options = defaultOptions;
-		} else if (!options) {
-			options = defaultOptions;
-		}
-		var dk = schema.options.discriminatorKey;
-		var model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
-		console.debug(`[model ${this.modelName}(dk=${dk})].findOrCreate(): query=${inspect(query,{compact:true})} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+	schema.static('findOrCreate', function findOrCreate(...args) { // [query, ] data[, options][, cb]) {
 
-		return Q(model.findOne(query))
+		var cb, query, data, model, options = {
+			saveImmediate: false,		// if true, calls doc.save() immediately after creation or after finding the doc 
+			query: undefined					// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
+		};
+		_.forEach(args, (arg, i) => {
+			if (cb) {
+				throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Callback is not last, cb !== null at arg #${i}. (args=${inspect(args)})`);
+			}
+			if (typeof arg === 'function') {
+				cb = arg;
+			} else if (typeof arg === 'object') {
+				if (!data) {
+					data = arg;
+				} else {
+					_.assign(options, arg);
+				}
+			} else {
+				throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Unexpected parameter type ${typeof arg} for arg #${i}. (args=${inspect(args)})`);
+			}
+		});
+		var dk = schema.get('discriminatorKey');
+		model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
+		
+		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): 1 options=${inspect(options, { depth:3, compact: true })} data='${inspect(data)}'`);
+
+		if (!options.query) {
+			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
+		}
+		if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string')) {
+			options.query = _.pick(data, options.query);	
+		} else if (_.isObject(options.query)) {
+			options.query = _.assign(
+				_.pick(data, _.filter(options.query, (value, key) => value == undefined)),
+				_.pick(options.query, _.filter(options.query, (value, key) => value !== undefined)));
+		}
+		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+
+		// var q = model.findOneAndUpdate(query, data, { upsert: true });
+		return Q(model.findOne(options.query))
 		.then(r => r ? r.updateDocument(data) : model.construct(data))
 		// .then(doc => _.set(doc, '_actions', {}))
 		.then(doc => options.saveImmediate ? doc.save() : doc);
 	});
-
-	// Artefact related
-
-	schema.add({
-		// _artefact: { type: mongoose.SchemaTypes.Mixed, required: false, default: undefined },
-		_primary: { type: mongoose.SchemaTypes.ObjectId, refPath: '_primaryType', required: false, default: undefined },
-		_primaryType: { type: String, required: false/*true*/, default: undefined }
-	});
-	schema.virtual('_artefact');
-
-	/* Find a _meta document from the given model(table)
-	 * */
-	schema.method('getArtefact', function getArtefact(options = {}) {
-		
-		var doc = this;
-		var dk = schema.options.discriminatorKey;
-		var docModel = this.constructor;
-		var docModelName = doc[dk] || docModel.modelName;//docModel.discriminators[doc[dk]] && doc.constructor.discriminators[doc[dk]] ? doc.constructor.discriminators[doc[dk]] : doc.constructor;
-		// TODO: 181201: Do you want the model name being the discriminator value? or aybe the baseModleName + '.' or ':' + discrim value (e.g. "file" and "dir" or "fs.file" and "fs.,dir" - may become necessary or desirable if typenames are likely to collide)
-
-		doc._primary = doc;
-		doc._primaryType = docModelName;
-
-		function doMetaPipe(meta, promisePipe) {
-			if (!promisePipe) {
-				return meta;
-			}
-			if (_.isArray(promisePipe)) {
-				promisePipe = chainPromiseFuncs(promisePipe);
-			} else if (typeof promisePipe !== 'function') {
-				throw new TypeError(`doMetaPipe: promisePipe should be a function or array, but is a ${typeof promisePipe}`);
-			}
-			return promisePipe(meta);
-		}
-
-		var a = Object.create({
-			
-			// get _primaryDataType() { return docModelName; },
-			// get _primaryDataId() { return doc._id; },
-			// get _primaryData() { return doc; },
-
-			// get [docModelName]() { return doc; },
-			
-			save(opts) {
-				opts = _.assign({
-					maxBatchSize: 10,
-					batchTimeout: 750
-				}, opts);
-				console.debug(`Artefact.save(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
-				return Q.all(
-					_.map(this, (data, dataName) => data.save(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts))
-				)
-				.then(() => this);
-			},
-
-			bulkSave(opts) {
-				opts = _.assign({
-					maxBatchSize: 10,
-					batchTimeout: 750
-				}, opts);
-				console.debug(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
-				return Q.all(
-					_.map(this, (data, dataName) => data.bulkSave(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts))
-				)
-				.then(() => this);
-			},
-
-			addMetaData(modelName, data, promisePipe) {
-				console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
-				if (this[modelName]) {
-					console.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
-					return Q(this);
-				} else {
-					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
-					var model = mongoose.model(modelName);
-					if (!model) throw new Error(`model '${modelName}' does not exist`);
-					var data = doMetaPipe(new model(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data)), promisePipe);
-					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, data=${inspect(data, { compact: false })}`);
-					return Q(Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: data }));
-				}
-			},
-
-			addOrFindMetaData(modelName, data, promisePipe) {
-				var model = mongoose.model(modelName);
-				return model.findOrCreate(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data))
-				.then(meta => {
-					console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}, promisePipe: ${promisePipe?'yes':'no'}`);
-					if (meta) {
-						meta = doMetaPipe(meta, promisePipe);
-						// meta._artefact = this;
-						Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta });
-					}
-				}).then(() => this);
-			},
-
-			findMetaData(modelName, promisePipe) {
-				var model = mongoose.model(modelName);
-				return model.findOne({ _primary: doc, _primaryType: docModelName })
-				.then(meta => {
-					console.debug(`getArtefact: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${!meta?'(null)':inspect(meta, { compact: false })}`);
-					if (meta) {
-						meta = doMetaPipe(meta, promisePipe);
-						// meta._artefact = this;
-						Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta });
-					}
-				}).then(() => this);
-			}
-
-		}, {
-			// _primaryDataType: { enumerable: true, value: docModelName },
-			// _primaryDataId: doc._id,
-			[docModelName]: { writeable: true, enumerable: true, value: doc }
-		});
-		doc._artefact = a;
-
-		var allModels = options.meta ? _.keys(options.meta) :
-			_.filter(mongoose.modelNames(), modelName => {
-				var m = mongoose.model(modelName);
-				return m.discriminators === undefined && docModel.baseModelName != m.baseModelName && docModel.modelName != m.baseModelName && docModel.baseModelName != m.modelName;
-			});
-		
-		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
-		.then(() => { console.debug(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
-		.then(() => Q(a));
-	
-	});
-
-	schema.query.getArtefacts = function getArtefacts(...args) {
-		var model = this;
-		var cursor = this.cursor({ transform: fs => Artefact(fs) });
-		Object.defineProperty(cursor, 'promisePipe', { enumerable: true, value: function cursorPromisePipe(...args) {
-			var fns = [];
-			var options = null;
-			_.forEach(args, (arg, i) => {
-				if (typeof arg === 'object') {
-					if (fns.length > 0 || options !== null) {
-						throw new TypeError(`findArtefacts: object after functions`);
-					}
-					options = arg;
-				} else if (typeof arg === 'function') {
-					fns.push(arg);
-				} else {
-					throw new TypeError(`findArtefacts: args must be [object], [...functions]`);
-				} 
-			});
-			options = _.defaults(options, { concurrency: 8 });
-			console.debug(`[model ${model.modelName}].getArtefacts().promisePipe(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
-			return promisePipe(cursor, options, ...fns);
-		}});
-		console.debug(`[model ${model.modelName}].getArtefacts(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
-		return cursor;
-	};
-
-	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
-		if (!_.isDate(timestamp)) {
-			throw new TypeError(`isCheckedSince: timestamp must be a Date`);
-		}
-		return !this.isNew && this._ts.checkedAt > timestamp;
-	});
-
 };
