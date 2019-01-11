@@ -35,10 +35,10 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 				.tap(result => console.verbose(`[model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
 				.then(result => schemaHooksExecPost(name, model, [ result ], { error: undefined }))
 				.tap(result => console.verbose(`[model ${model.modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.catch(e => {
-					console.warn(` ## [model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${e.stack||err}`);
-					schemaHooksExecPost(name, model, [ null ], { error: e });
-					throw e;
+				.catch(err => {
+					console.warn(` ## [model ${model.modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${err.stack||err}`);
+					schemaHooksExecPost(name, model, [ null ], { error: err });
+					throw err;
 				});
 		});
 	});

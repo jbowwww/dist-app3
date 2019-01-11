@@ -40,7 +40,7 @@ module.exports = {
 			filter: undefined,
 			// removePathPrefix: undefined,
 			objectMode: true,
-			highWaterMark: 8,
+			highWaterMark: 16,
 			handleError(err) {
 				console.warn(`iterate: ${err.stack||err}`);
 			}

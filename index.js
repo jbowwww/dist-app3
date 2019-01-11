@@ -37,9 +37,9 @@ process.on('beforeExit', () => {
 var searches = [
 	// { path: '/mnt/Stor', maxDepth: 0 },
 	// { path: '/mnt/Storage', maxDepth: 0 },
-	{ path: '/media/jk/Backup/RECOVERED_FILES/mystuff/Backup', maxDepth: 0 },
+	// { path: '/media/jk/Backup/RECOVERED_FILES/mystuff/Backup', maxDepth: 0 },
 	// { path: '/media/jk/My Passport', maxDepth: 0 },
-	// { path: '/home/jk', maxDepth: 1 }
+	{ path: '/home/jk', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -54,23 +54,24 @@ var pipelines = {
 
 mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
 
-	.then(() => Disk.findOrPopulate())// .catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
-.then(Q.all(_.map(searches, search => fsIterate(search).promisePipe(
+.then(() => Disk.findOrPopulate())// .catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
+// .delay(2000)
+.then(() => Q.all(_.map(searches, search => fsIterate(search).promisePipe(
 	// pipelines.debug,
-	f => FsEntry.findOrCreate(/*{ path: f.path },*/ f, { saveImmediate: f.fileType === 'dir' }),
+	f => FsEntry.findOrCreate(/*{ path: f.path },*/ f/*, { saveImmediate: f.fileType === 'dir' }*/),
 	f => Artefact(f),
 	// pipelines.doHash,			// pipelines.debug,
 	// pipelines.doAudio,			//pipelines.debug,
-	pipelines.debug,
+	// pipelines.debug,
 	pipelines.bulkSave
 )
 .catch(err => console.warn(`Err: ${err.stack||err}`)))))
 
 .delay(1500)
 .then(() => { console.verbose(`mongoose.models count=${_.keys(mongoose/*.connection*/.models).length} names=${mongoose/*.connection*/.modelNames().join(', ')}`); })
-.then(() => Q.all(_.map(mongoose/*.connection*/.models, m => (m._bulkSaveDeferredAccum ? m._bulkSaveDeferredAccum : Q())
-	.tap(() => console.verbose(`[model ${m.modelName}]._bulkSaveDeferredAccum done`)))))
-.then(bulkSaveDeferreds => { console.verbose(`mongoose bulkSaveDeferreds.length=${bulkSaveDeferreds.length}`); })
+// .then(() => Q.all(_.map(mongoose/*.connection*/.models, m => (m._bulkSaveDeferredAccum ? m._bulkSaveDeferredAccum : Q())
+	// .tap(() => console.verbose(`[model ${m.modelName}]._bulkSaveDeferredAccum done`)))))
+// .then(bulkSaveDeferreds => { console.verbose(`mongoose bulkSaveDeferreds.length=${bulkSaveDeferreds.length}`); })
 .then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))

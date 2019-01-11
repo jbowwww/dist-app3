@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -61,36 +61,36 @@ fsEntry.plugin(require('../plugin/artefact.js'));
 
 fsEntry.post('init', function() {
 	var model = this.constructor;//model;
-	this.populate('dir partition').execPopulate().tap(() => console.verbose(`[model ${model.modelName}].post('init').populated: this=${inspect(this)}`));
+	this.populate([{ path: 'dir', select: 'path _ts' }, { path: 'partition' }]).execPopulate()
+	.tap(() => console.verbose(`[model ${model.modelName}].post('init').populated: this=${inspect(this)}`));
 });
 
-fsEntry.post('construct', async function construct(fs) {
+fsEntry.post('construct', /*async */function construct(fs/*, next*/) {
 	var model = this;
 	const Dir = mongoose.model('dir');
 	const Partition = mongoose.model('partition');
-	const dirPath = fs.dir ? fs.dir.path : nodePath.dirname(fs.path);
-	
-	try {
-		if (dirPath === fs.path) {
-			fs.dir = null;
-		} else if (!fs.dir) {// instanceof mongoose.Document)) {
-			await Dir.findOne({ path: dirPath }).then(dir => _.set(fs, 'dir', dir ? dir._id : null));
-		}
-		if (!fs.partition) {
-			await Partition.find({}).then(partitions => {
-				var searchPartitions =_.reverse(_.sortBy(_.filter(partitions, partition => typeof partition.mountpoint === 'string'), partition => partition.mountpoint.length));
+	const dirPath = nodePath.dirname(fs.path);
+	console.verbose(`fsEntry.post('construct'): fs=${inspect(fs)}, disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}`);
+	// try {
+		return Q.all([
+			(dirPath === fs.path ? null : fs.dir || Dir.findOne({ path: dirPath })).then(dir => _.set(fs, 'dir', dir ? dir._id : null)),
+			fs.partition || Partition.find({}).then(partitions => {
+				var searchPartitions =_.reverse( _.sortBy(
+					_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
+					partition => partition.mountpoint.length));
 				var part =_.find(searchPartitions, partition => fs.path.startsWith(partition.mountpoint));	
 				_.set(fs, 'partition', part ? part._id : null);
 				return fs;
-			});
-		}
-		console.verbose(`[model ${model.modelName}].post('construct').populated: this=${inspect(this)}`);
-		return fs;
-	} catch(err) {
-		model._stats.errors.push(err);
-		console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);
-		throw err;
-	}
+			})
+		])
+		.tap(() => console.verbose(`[model ${model.modelName}].post('construct').populated: this=${inspect(this)}`))
+		// .then(next)//return fs;
+		.catch(err => {
+			model._stats.errors.push(err);
+			console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);
+			throw err;
+			// next(err);
+		});
 });
 
 fsEntry.method('hasFileChanged', function() {

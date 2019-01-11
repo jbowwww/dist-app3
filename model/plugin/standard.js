@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const Artefact = require('../../Artefact.js');
 
 const statPlugin = require('./stat.js');
-const trackedMethods = ['validate', 'save'/*, 'bulkSave'*//*, 'find'*/];
+const trackedMethods = ['validate', 'save', 'bulkSave' ];/*, 'find'];
 
 /* Standard/common schema methods, statics
  */
@@ -18,6 +18,10 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
+	schema.pre('bulkSave', function(next) {
+		console.verbose(`presave: doc=${inspect(this)}`);
+		next();
+	})
 /*
 	schema.pre('validate', function(next) {
 		var model = this.constructor;
@@ -94,28 +98,28 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 		schema.pre(methodName, function(next) {
 			var doc = this;
 			var model = this.constructor;
-			var eventName = 'pre.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			// var eventName = 'pre.' + methodName;
+			// model.emit(eventName, doc);
+			// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			var actionType = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
-			if (!doc._actions) {
-				_.set(doc, '_actions', {});
-			}
-			doc._actions[methodName] = actionType;
+			// if (!doc._actions) {
+				// _.set(doc, '_actions', actionType);//{});
+			// }
+			// doc._actions[methodName] = actionType;
 			model._stats[methodName]/*[actionType]*/.calls++;
 			model._stats[methodName][actionType]++;
-			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc._actions=${inspect(doc._actions)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
+			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc._actions=${inspect(doc._actions)}
 			next();
 		});
 
 		schema.post(methodName, function(res, next) {
 			var doc = this;
 			var model = doc.constructor;
-			var actionType = doc._actions[methodName];
-			doc._actions[methodName] = null;
-			var eventName = 'post.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			// var actionType = doc._actions;//[methodName];
+			// doc._actions[methodName] = null;
+			// var eventName = 'post.' + methodName;
+			// model.emit(eventName, doc);
+			// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			model._stats[methodName]/*[actionType]*/.success++;
 			console.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
@@ -124,18 +128,13 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 		schema.post(methodName, function(err, res, next) {
 			var doc = this;
 			var model = doc.constructor;
-			var actionType = doc._actions[methodName];
-			var eventName = 'err.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			if (err) {
-				model._stats[methodName].errors.push(err);
-				console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
-				return next(err);
-			} else {
-				console.debug(`[doc ${model.modelName}].post('${methodName}') Succ: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
-				return next();
-			}
+			// var actionType = doc._actions[methodName];
+			// var eventName = 'err.' + methodName;
+			// model.emit(eventName, doc);
+			// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			model._stats[methodName].errors.push(err);
+			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
+			return next(err);
 		});
 	});
 
@@ -202,19 +201,18 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 		var dk = schema.get('discriminatorKey');
 		model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		
-		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): 1 options=${inspect(options, { depth:3, compact: true })} data='${inspect(data)}'`);
-
 		if (!options.query) {
 			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
 		}
 		if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string')) {
 			options.query = _.pick(data, options.query);	
 		} else if (_.isObject(options.query)) {
-			options.query = _.assign(
-				_.pick(data, _.filter(options.query, (value, key) => value == undefined)),
-				_.pick(options.query, _.filter(options.query, (value, key) => value !== undefined)));
+			options.query = _.mapValues(schema.get('defaultFindQuery'), (v, k) => v === undefined ? data[k] : v);
+			// _.assign(
+			// 	_.pick(data, _.filter(options.query, (value, key) => value == undefined)),
+			// 	_.pick(options.query, _.filter(options.query, (value, key) => value !== undefined)));
 		}
-		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'))} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
 
 		// var q = model.findOneAndUpdate(query, data, { upsert: true });
 		return Q(model.findOne(options.query))
