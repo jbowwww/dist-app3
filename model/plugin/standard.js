@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -10,6 +10,8 @@ const Artefact = require('../../Artefact.js');
 const statPlugin = require('./stat.js');
 const trackedMethods = ['validate', 'save', 'bulkSave' ];/*, 'find'];
 
+// TODO: Work out separation of concerns with model._stats and all your separate plugins e.g. bulksave (stat plugin is more of a plugin plugin)
+
 /* Standard/common schema methods, statics
  */
 module.exports = function standardSchemaPlugin(schema, options) {
@@ -18,10 +20,10 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
-	schema.pre('bulkSave', function(next) {
-		console.verbose(`presave: doc=${inspect(this)}`);
-		next();
-	})
+	// schema.pre('bulkSave', function(next) {
+	// 	console.verbose(`presave: doc=${inspect(this)}`);
+	// 	next();
+	// })
 /*
 	schema.pre('validate', function(next) {
 		var model = this.constructor;
@@ -108,7 +110,7 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 			// doc._actions[methodName] = actionType;
 			model._stats[methodName]/*[actionType]*/.calls++;
 			model._stats[methodName][actionType]++;
-			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc._actions=${inspect(doc._actions)}
+			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc._actions=${inspect(doc._actions)}
 			next();
 		});
 
