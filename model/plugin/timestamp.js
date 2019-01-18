@@ -32,6 +32,7 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		} else if (!doc._ts.updatedAt) {
 			doc._ts.checkedAt = now;
 		}
+		
 		console.verbose(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: isNew=${doc.isNew} ${doc.modifiedPaths().join(' ')}`);
 		return next();
 	});

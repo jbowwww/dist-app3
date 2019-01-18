@@ -3,6 +3,7 @@
 const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 const promisifyMethods = require('../utility.js').promisifyMethods;
+const util = require('util');
 const _ = require('lodash');
 const nodeFs = promisifyMethods(require('fs'));
 const nodePath = require('path');
@@ -27,6 +28,9 @@ module.exports = {
 				var n = this.path.lastIndexOf('.');
 				var n2 = Math.max(this.path.lastIndexOf('/'), this.path.lastIndexOf('\\'));
 				return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
+			},
+			[util.inspect.custom](depth, options) {
+				return _.assign({}, this);
 			}
 		}));
 	};
@@ -42,11 +46,11 @@ module.exports = {
 			objectMode: true,
 			highWaterMark: 16,
 			handleError(err) {
-				console.warn(`iterate: ${err.stack||err}`);
+				console.warn(`iterate: ${err}`);//${err.stack||err}`);
 			}
 		});
 		var path = nodePath.resolve(options.path);
-		console.verbose(`iterate('${path}', ${inspect(options)})`);
+		console.verbose(`iterate('${path}', ${inspect(options, { compact: false })})`);
 	  	
 		var self = _.extend({
 			root: path,

@@ -55,10 +55,12 @@ var audioSchema = new mongoose.Schema({
 //     this.fileId = file._id;
 // })
 
+audioSchema.plugin(require('./plugin/custom-hooks.js'));
 audioSchema.plugin(require('./plugin/timestamp.js'));
 audioSchema.plugin(require('./plugin/standard.js'));
 audioSchema.plugin(require('./plugin/bulk-save.js'));
-audioSchema.plugin(require('./plugin/stat.js'), { data: { save: {}, validate: {} } });
+audioSchema.plugin(require('./plugin/artefact.js'));
+// audioSchema.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 
 audioSchema.method('loadMetadata', function loadMetadata(file) {
     var audio = this;

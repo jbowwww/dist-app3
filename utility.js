@@ -18,7 +18,7 @@ var makeInspect = (defaultOptions) => {
 };
 var inspect = (subject, options) => util.inspect(subject, mixin({}, _defaultInspectOptions, options));
 
-module.exports = {
+module.exports = /*_.assign(util,*/ {
 	formatSize ,
 	padNumber ,
 	roundNumber ,
@@ -32,7 +32,7 @@ module.exports = {
 	promisifyEmitter,
 	promisifyMethods,
 	promisifyPipeline
-};
+}/*)*/;
 
 // return a string with the supplied size in bytes, formatted as B, KB, MB, GB or TB
 function formatSize(size, options = { precision: 2, spacer: ' ' }) {

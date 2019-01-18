@@ -5,7 +5,7 @@ const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-const { promisePipe, artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
+const { /*promisePipe,*/ artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
 
 const Artefact = require('../../Artefact.js');
 
@@ -31,8 +31,6 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 		// var oldModel = this.constructor;
 		var model = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
 		var modelName = model.modelName;
-		console.debug(`[model ${model.baseModelName}(dk=${dk})].getArtefact(): doc=${inspect(_.clone(doc))} doc[dk]='${doc[dk]}': setting model='${modelName}'`);
-
 		doc._primary = doc;
 		doc._primaryType = modelName;
 
@@ -89,7 +87,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
 					var model = mongoose.model(modelName);
 					if (!model) throw new Error(`model '${modelName}' does not exist`);
-					var data = doMetaPipe(new model(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: modelName }, data)), promisePipe);
+					var data = doMetaPipe(/*new model*/model.construct(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: modelName }, data)), promisePipe);
 					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, data=${inspect(data, { compact: false })}`);
 					return Q(Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: data }));
 				}
@@ -126,8 +124,9 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 			// _primaryDataId: doc._id,
 			[model.baseModelName]: { writeable: true, enumerable: false, value: doc }, 
 			[modelName]: { writeable: true, enumerable: true, value: doc }
+			// [util.inspect.custom](depth, options): { return }
 		});
-		doc._artefact = a;
+		// doc._artefact = a;
 
 		var allModels = options.meta ? _.keys(options.meta) :
 			_.filter(mongoose.modelNames(), modelName => {
@@ -135,6 +134,8 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 				return m.discriminators === undefined && model.baseModelName != m.baseModelName && model.modelName != m.baseModelName && model.baseModelName != m.modelName;
 			});
 		
+		console.debug(`[model ${modelName}(dk=${dk})].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);
+
 		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
 		.then(() => { console.debug(`getArtefact: modelName=${modelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
 		.then(() => Q(a));	

@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -16,9 +16,10 @@ const trackedMethods = ['validate', 'save', 'bulkSave' ];/*, 'find'];
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
-console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFindQuery'))}`);
+	// schema.set('toObject', { getters: true });
+	// schema.set('toJSON', { getters: true });
 
-	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, schema.prototype=${inspect(schema.prototype)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
 	// schema.pre('bulkSave', function(next) {
 	// 	console.verbose(`presave: doc=${inspect(this)}`);
@@ -138,6 +139,7 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 			return next(err);
 		});
+
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
@@ -214,7 +216,7 @@ console.verbose(`schema.get('defaultFindQuery'): ${inspect(schema.get('defaultFi
 			// 	_.pick(data, _.filter(options.query, (value, key) => value == undefined)),
 			// 	_.pick(options.query, _.filter(options.query, (value, key) => value !== undefined)));
 		}
-		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'))} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
 
 		// var q = model.findOneAndUpdate(query, data, { upsert: true });
 		return Q(model.findOne(options.query))
