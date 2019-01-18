@@ -143,7 +143,7 @@ var self = {
 				 return newData;
 			})
 			.catch(err => {
-				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: _.clone(data) });
+				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: /*_.clone*/(data) });
 				if (options.catchErrors && typeof options.catchErrors === 'function') {
 					options.catchErrors(err);
 				}

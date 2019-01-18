@@ -8,7 +8,6 @@ const mongoose = require('mongoose');
 const Artefact = require('../../Artefact.js');
 
 const statPlugin = require('./stat.js');
-const trackedMethods = ['validate', 'save', 'bulkSave' ];/*, 'find'];
 
 // TODO: Work out separation of concerns with model._stats and all your separate plugins e.g. bulksave (stat plugin is more of a plugin plugin)
 
@@ -16,59 +15,8 @@ const trackedMethods = ['validate', 'save', 'bulkSave' ];/*, 'find'];
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
-	// schema.set('toObject', { getters: true });
-	// schema.set('toJSON', { getters: true });
-
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, schema.prototype=${inspect(schema.prototype)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
-	// schema.pre('bulkSave', function(next) {
-	// 	console.verbose(`presave: doc=${inspect(this)}`);
-	// 	next();
-	// })
-/*
-	schema.pre('validate', function(next) {
-		var model = this.constructor;
-		
-	var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-	// 	
-			this.constructor._stats.validate.calls++;
-		return next();
-	});
-	schema.post('validate', function(doc, next) {
-		var model = this.constructor;
-		console.debug(`stat: [model ${model.modelName}].post('validate'): id=${this._id.toString()}`);//: modelName=${this.constructor.modelName} keys(this.constructor)=${_.keys(this.constructor).join(', ')} keys(this.constructor.prototype)=${_.keys(this.constructor.prototype).join(', ')}`);
-		this.constructor._stats.validate.success++;
-		return next();
-	});
-			this.constructor._stats[methodName].validate[actionType]++;	// schema.post('validate', function(err, doc, next) 
-	{
-		var model = this.constructor;
-		console.error(`stat: [model ${model.modelName}].post('validate') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
-		this.constructor._stats.validate.errors.push(err);
-		return next(err);
-	});
-
-	schema.pre('save', function(next) {
-		var model = this.constructor;
-		var actionType = this.isNew ? 'created' : this.isModified() ? 'updated' : 'checked';
-		console.debug(`stat: [model ${model.modelName}].pre('save'): actionType=${actionType} id=${this._id.toString()}`);
-		this.constructor._stats.save[actionType]++;
-		this.constructor._stats.save.calls++;
-		return next();
-	});
-	schema.post('save', function(doc, next) {
-		var model = this.constructor;
-		console.debug(`stat: [model ${model.modelName}].post('save'): id=${this._id.toString()}`);
-		this.constructor._stats.save.success++;
-		return next();
-	});
-	schema.post('save', function(err, doc, next) {
-		var model = this.constructor;
-		console.error(`stat: [model ${model.modelName}].post('save') error: id=${this._id.toString()}: ${err.stack||err.message||err}`);
-		this.constructor._stats.save.errors.push(err);
-		return next(err);
-	});
-
 	schema.pre('construct', function(next) {
 		var model = this;
 		console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
@@ -101,15 +49,11 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		schema.pre(methodName, function(next) {
 			var doc = this;
 			var model = this.constructor;
-			// var eventName = 'pre.' + methodName;
-			// model.emit(eventName, doc);
-			// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			var eventName = 'pre.' + methodName;
+			model.emit(eventName, doc);
+			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			var actionType = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
-			// if (!doc._actions) {
-				// _.set(doc, '_actions', actionType);//{});
-			// }
-			// doc._actions[methodName] = actionType;
-			model._stats[methodName]/*[actionType]*/.calls++;
+			model._stats[methodName].calls++;
 			model._stats[methodName][actionType]++;
 			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc._actions=${inspect(doc._actions)}
 			next();
@@ -118,12 +62,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		schema.post(methodName, function(res, next) {
 			var doc = this;
 			var model = doc.constructor;
-			// var actionType = doc._actions;//[methodName];
-			// doc._actions[methodName] = null;
-			// var eventName = 'post.' + methodName;
-			// model.emit(eventName, doc);
-			// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			model._stats[methodName]/*[actionType]*/.success++;
+			var eventName = 'post.' + methodName;
+			model.emit(eventName, doc);
+			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			model._stats[methodName].success++;
 			console.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
@@ -131,10 +73,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		schema.post(methodName, function(err, res, next) {
 			var doc = this;
 			var model = doc.constructor;
-			// var actionType = doc._actions[methodName];
-			// var eventName = 'err.' + methodName;
-			// model.emit(eventName, doc);
-			// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+			var eventName = 'err.' + methodName;
+			model.emit(eventName, doc);
+			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			model._stats[methodName].errors.push(err);
 			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 			return next(err);

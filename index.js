@@ -44,7 +44,7 @@ var searches = [
 ];
 
 var pipelines = {
-	debug: tap(a => { a = a.file; if (!a) return; console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a/*.toObject({ getters: true })*/)}\n\n!!\n`); }),
+	debug: tap(a => {/* a = a.file; if (!a)*/ return; console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a/*.toObject({ getters: true })*/)}\n\n!!\n`); }),
 	bulkSave: a => a.bulkSave(),
 	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
 	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
@@ -72,20 +72,19 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 // .delay(2000)
 
-.then(() => Q.all(_.map(searches, search => fsIterate(search).promisePipe(
-	// pipelines.debug,
-	f => FsEntry.findOrCreate(/*{ path: f.path },*/ f/*, { saveImmediate: f.fileType === 'dir' }*/),
-	f => Artefact(f),
-	pipelines.doHash,			// pipelines.debug,
-	pipelines.doAudio,			//pipelines.debug,
-	// pipelines.debug,
-	pipelines.bulkSave
-	// pipelines.debug
-)
-.catch(err => console.warn(`Err: ${err.stack||err}`)))))
+.then(() => Q.all(_.map(searches, search =>
+	fsIterate(search).pipe(
+			Artefact.promisePipe()
+			pipelines.doHash,			// pipelines.debug,
+			pipelines.doAudio,			//pipelines.debug,
+			pipelines.debug,
+			pipelines.bulkSave ))
+	.catch(err => console.warn(`Err: ${err.stack||err}`)) )))
 
 .delay(1500)
+
 .then(() => { console.verbose(`mongoose.models count=${_.keys(mongoose/*.connection*/.models).length} names=${mongoose/*.connection*/.modelNames().join(', ')}`); })
+
 .then(() => Q.all(_.map(mongoose/*.connection*/.models, m => (m._bulkSaveDeferredAccum ? m._bulkSaveDeferredAccum : Q())
 	.tap(() => console.verbose(`[model ${m.modelName}]._bulkSaveDeferredAccum done`)))))
 .then(bulkSaveDeferreds => { console.verbose(`mongoose bulkSaveDeferreds.length=${bulkSaveDeferreds.length}`); })

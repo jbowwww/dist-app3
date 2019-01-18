@@ -39,7 +39,7 @@ var fsEntry = new mongoose.Schema({
 }, {
 	discriminatorKey: 'fileType',
 	defaultFindQuery: { path: undefined },
-	toObject: { getters: true }
+	// toObject: { getters: true }
 });
 
 

@@ -53,12 +53,16 @@ module.exports = {
 		console.verbose(`iterate('${path}', ${inspect(options, { compact: false })})`);
 	  	
 		var self = _.extend({
+			
 			root: path,
 			rootDepth: path.split(nodePath.sep).length - 1,
 			paths: [path],
 			errors: []
+		
 		}, new require('stream').Readable({
+			
 			objectMode: true,
+
 			read: function (size) {
 
 				return (function next() {

@@ -17,6 +17,13 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		deletedAt: { type: Date, required: false }
 	} });
 
+	schema.virtual('isDeleted').get(function() {
+		return this._ts.deletedAt && this._ts.deletedAt <= Date.now();
+	});
+
+	// schema.set('toObject', { getters: true, virtuals: true });
+	// schema.set('toJSON', { getters: true, virtuals: true });
+
 	schema.post('validate', function(doc, next) {
 		var model = doc.constructor;
 		if (!doc._ts.createdAt && !doc.isNew) {
@@ -32,14 +39,11 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		} else if (!doc._ts.updatedAt) {
 			doc._ts.checkedAt = now;
 		}
-		
+
 		console.verbose(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: isNew=${doc.isNew} ${doc.modifiedPaths().join(' ')}`);
 		return next();
 	});
 
-	schema.virtual('isDeleted', function() {
-		return this._ts.deletedAt && this._ts.deletedAt <= Date.now();
-	});
 	
 	schema.method('markDeleted', function(timestamp = Date.now()) {
 		if (this._ts.deletedAt) { console.warn(`Doc being marked deleted already has deletedAt=${this._ts.deletedAt}`); }
