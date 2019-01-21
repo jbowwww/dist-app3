@@ -21,6 +21,7 @@ function Artefact(rootData) {
 Artefact.promisePipe = function Artefact_promisePipe(...promiseFuncs) {
 	return streamPromise(
 		writeablePromiseStream(
+			data => data instanceof mongoose.Document ? Artefact(data) : promiseFuncs.unshift()(data).then(data => Artefact(data)),
 			...promiseFuncs,
 			rootData => Artefact(rootData)
 		),

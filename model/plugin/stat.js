@@ -6,6 +6,7 @@ const _ = require('lodash');
 
 module.exports = function statSchemaPlugin(schema, options) {
 
+// TODO = custom inspect func that omits values of 0 and objects containing only 0's
 	console.debug(`statSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 
 	options = _.merge({ data: { save: {}, validate: {} } }, options);
@@ -29,6 +30,7 @@ module.exports = function statSchemaPlugin(schema, options) {
 					create: 0,
 					update: 0,
 					check: 0,
+					static: 0,
 					errors: []
 				}, value))
 			});

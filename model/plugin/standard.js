@@ -4,9 +4,11 @@ const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: fal
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
+
+const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('../../promise-pipe.js');
+
 const mongoose = require('mongoose');
 const Artefact = require('../../Artefact.js');
-
 const statPlugin = require('./stat.js');
 
 // TODO: Work out separation of concerns with model._stats and all your separate plugins e.g. bulksave (stat plugin is more of a plugin plugin)
@@ -17,28 +19,28 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, schema.prototype=${inspect(schema.prototype)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
-	schema.pre('construct', function(next) {
-		var model = this;
-		console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
-		return next();
-	});
-	schema.post('construct', function(doc, next) {
-		var model = this;
-		console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
-		return next();
-	});
-	schema.post('construct', function(err, doc, next) {
-		var model = this;//.constructor;
-		console.error(`stat: [model ${model.modelName}].post('construct') error: id=${doc && doc._id ? doc._id.toString() : '(null)'}: ${err.stack||err}`);
-		model._stats.errors.push(err);
-		return next(err);
-	});
-*/
+	// schema.pre('construct', function(next) {
+	// 	var model = this;
+	// 	console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
+	// 	return next();
+	// });
+	// schema.post('construct', function(doc, next) {
+	// 	var model = this;
+	// 	console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
+	// 	return next();
+	// });
+	// schema.post('construct', function(err, doc, next) {
+	// 	var model = this;//.constructor;
+	// 	console.error(`stat: [model ${model.modelName}].post('construct') error: id=${doc && doc._id ? doc._id.toString() : '(null)'}: ${err.stack||err}`);
+	// 	model._stats.errors.push(err);
+	// 	return next(err);
+	// });
 
 	schema.static('construct', function construct(data, cb) {
-		return Q(new (this)(_.assign(data, { _ts: { createdAt: Date.now() } })));
+		return Q(new (this)(/*_.assign*/(data/*, { _ts: { createdAt: Date.now() } }*/)));
 	});
 
+	const trackedMethods = [ "validate", "save", "bulkSave", "upsert" ];
 	schema.plugin(statPlugin, { data: _.fromPairs(_.map(trackedMethods, methodName => ([methodName, {}]))) });
 
 	/* would use a regex to match everything but i can't see any way to then get the actual event name??
@@ -48,11 +50,14 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		
 		schema.pre(methodName, function(next) {
 			var doc = this;
-			var model = this.constructor;
+			var model = doc instanceof mongoose.Document ? doc.constructor : this;
+			if (!doc && arguments[0] instanceof mongoose.Document) {
+				doc = arguments[0];
+			}
 			var eventName = 'pre.' + methodName;
 			model.emit(eventName, doc);
 			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			var actionType = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
+			var actionType = doc instanceof mongoose.Document ? doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' : 'static';
 			model._stats[methodName].calls++;
 			model._stats[methodName][actionType]++;
 			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc._actions=${inspect(doc._actions)}
@@ -61,7 +66,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 		schema.post(methodName, function(res, next) {
 			var doc = this;
-			var model = doc.constructor;
+			var model = doc instanceof mongoose.Document ? doc.constructor : this;
+			if (!doc && arguments[0] instanceof mongoose.Document) {
+				doc = arguments[0];
+			}
 			var eventName = 'post.' + methodName;
 			model.emit(eventName, doc);
 			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
@@ -72,7 +80,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 		schema.post(methodName, function(err, res, next) {
 			var doc = this;
-			var model = doc.constructor;
+			var model = doc instanceof mongoose.Document ? doc.constructor : this;
+			if (!doc && arguments[0] instanceof mongoose.Document) {
+				doc = arguments[0];
+			}
 			var eventName = 'err.' + methodName;
 			model.emit(eventName, doc);
 			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
@@ -146,6 +157,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var dk = schema.get('discriminatorKey');
 		model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
 		
+		// I don't think the parsing/defaulting logic here is correct
 		if (!options.query) {
 			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
 		}
@@ -165,4 +177,114 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		// .then(doc => _.set(doc, '_actions', {}))
 		.then(doc => options.saveImmediate ? doc.save() : doc);
 	});
+
+/*	function parseArgs(...args) {
+
+		for (var arg of args) {
+			if (typeof arg === 'object') {
+				if (!doc) {
+					doc = arg;
+				} else if (!options) {
+					options = arg;
+				} else {
+					throw new ArgumentError(`Too many object arguments for uspert: 3 at most: args=${inspect(args)}`);
+				}
+			} else if (typeof arg === 'function') {
+				if (!cb) {
+					cb = arg;
+				} else {
+					throw new ArgumentError(`Too many function arguments for uspert: 1 at most: args=${inspect(args)}`);
+				}
+			}
+		}
+	}*/
+
+	schema.static('upsert', function upsert(...args) {
+
+		var [ doc, options, cb ] = args;	// doc may be a mongoose doc or  POJO
+		var dk = schema.get('discriminatorKey');
+		var discriminator = dk ? doc[dk] : undefined;
+		var model = dk && discriminator && this.discriminators[discriminator] ? this.discriminators[discriminator] : this;
+		var debugPrefix = `[model ${model.modelName}].upsert:`;//${dk?`(dk=${dk})`:''}]`;
+		console.log(`${debugPrefix} doc=${inspect(doc)} options=${inspect(options)} cb=${cb}`);
+
+		
+		if (!(doc instanceof mongoose.Document)) {
+			if (!_.isObject(doc)) {
+				throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:(object doc[, object options][, function cb]) received:${inspect(args)}`);
+			}
+			doc = new model(doc);
+		}
+		if (typeof options === 'function') {
+			if (!cb) {
+				cb = options; options = {};
+			} else {
+				throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:(object doc[, object options][, function cb]) received:${inspect(args)}`);
+			}
+		} else if (options && typeof options !== 'object') {
+			throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:(object doc[, object options][, function cb]) received:${inspect(args)}`);
+		}
+		if (!options) {
+			options = {};
+		}
+		
+		var q = options.query || schema.get('defaultFindQuery');	// can i actually maybe use model.$where for this? see mongoose-notes.txt
+		if (_.isArray(q) && _.each(q, v => typeof v === 'string')) {
+			q = _.pick(doc, q);	
+		} else if (_.isObject(q)) {
+			q = _.mapValues(q, (v, k) => v === undefined ? doc[k] : v);
+		}
+		options = _.assign(_.omit(options, 'query'), { upsert: true });
+
+		console.verbose(`${debugPrefix} options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} doc=${inspect(doc)}`);
+
+		return Q(model.updateOne.call(model, q, doc, options, cb))
+		.then(() => null);
+		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
+
+	});
+
+	schema.method('upsert', function upsert(...args) {
+
+		var [ options, cb ] = args;	// doc may be a mongoose doc or  POJO
+		var doc = this;
+		var model = doc.constructor;
+		var debugPrefix = `[doc ${model.modelName}].upsert:`;//${dk?`(dk=${dk})`:''}]`;
+		console.log(`${debugPrefix} doc=${inspect(doc)} options=${inspect(options)} cb=${cb}`);
+
+		if (!(doc instanceof mongoose.Document) && !_.isObject(doc)) {
+			throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:([object options][, function cb]) received:${inspect(args)}`);
+		}
+		if (typeof options === 'function') {
+			if (!cb) {
+				cb = options; options = {};
+			} else {
+				throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:([object options][, function cb]) received:${inspect(args)}`);
+			}
+		} else if (options && typeof options !== 'object') {
+			throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:([object options][, function cb]) received:${inspect(args)}`);
+		}
+		if (!options) {
+			options = {};
+		}
+		
+		var q = options.query || schema.get('defaultFindQuery');	// can i actually maybe use model.$where for this? see mongoose-notes.txt
+		if (_.isArray(q) && _.each(q, v => typeof v === 'string')) {
+			q = _.pick(doc, q);	
+		} else if (_.isObject(q)) {
+			q = _.mapValues(q, (v, k) => v === undefined ? doc[k] : v);
+		}
+		options = _.assign(_.omit(options, 'query'), { upsert: true });
+
+		console.verbose(`${debugPrefix} options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} doc=${inspect(doc)}`);
+
+		return Q(model.updateOne.call(model, q, doc, options, cb))
+		.then(() => null);
+		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
+
+	});
+
+	schema.query.promisePipe = function promisePipe(...promiseFuncs) {
+		return streamPromise(writeablePromiseStream(...promiseFuncs), { resolveEvent: 'finish' });
+	};
 };

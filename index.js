@@ -72,28 +72,43 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 
 // .delay(2000)
 
-.then(() => Q.all(_.map(searches, search =>
-	fsIterate(search).pipe(
-			Artefact.promisePipe()
-			pipelines.doHash,			// pipelines.debug,
-			pipelines.doAudio,			//pipelines.debug,
-			pipelines.debug,
-			pipelines.bulkSave ))
-	.catch(err => console.warn(`Err: ${err.stack||err}`)) )))
+.then(() => Q.all( _.map( searches, search => fsIterate(search).promisePipe(
+	// var fse = 
+	{ catchErrors: err => console.warn(`fsIterate promisePipe error for ${this.promisePipeData.fileType} '${this.promisePipeData.path}':\n${err.stack||err}`) },
+	// fse => FsEntry.findOrCreate(fse),
+	// fse => fse.bulkSave() )
+	fse => FsEntry.upsert(fse) )
+.catch(err => console.warn(`fsIterate error: ${err.stack||err}`)) ) ))
+	
+.delay(1100)
 
-.delay(1500)
+.then(async function() {
+	for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
+		await pipelines.doHash(f);
+		await pipelines.bulkSave(f);
+	}
+})
+
+.then(async function() {
+	for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
+		await pipelines.doAudio(f);
+		await pipelines.bulkSave(f);
+	}
+})
+
+.catch(err => console.error(`Other error: ${err.stack||err}`))
 
 .then(() => { console.verbose(`mongoose.models count=${_.keys(mongoose/*.connection*/.models).length} names=${mongoose/*.connection*/.modelNames().join(', ')}`); })
+.then(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose/*.connection*/.models, (model, modelName) => (model._stats)))}`); })
 
 .then(() => Q.all(_.map(mongoose/*.connection*/.models, m => (m._bulkSaveDeferredAccum ? m._bulkSaveDeferredAccum : Q())
 	.tap(() => console.verbose(`[model ${m.modelName}]._bulkSaveDeferredAccum done`)))))
 .then(bulkSaveDeferreds => { console.verbose(`mongoose bulkSaveDeferreds.length=${bulkSaveDeferreds.length}`); })
+
 .then(() => mongoose.connection.close()
 	.then(() => { console.log(`mongoose.connection closed`); })
 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.then(() => { console.log(`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose/*.connection*/.models, (model, modelName) => (model._stats)))}`); })
-
-.catch(err => console.error(`Err: ${err.stack||err}`))
+.catch(err => console.error(`Cleanup error: ${err.stack||err}`))
 
 .done();

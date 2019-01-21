@@ -66,6 +66,7 @@ fsEntry.post('init', function() {
 	.tap(() => console.verbose(`[model ${model.modelName}].post('init').populated: this=${inspect(this)}`));
 });
 
+// fsEntry.queue()
 fsEntry.post('construct', /*async */function construct(fs/*, next*/) {
 	var model = this;
 	const Dir = mongoose.model('dir');

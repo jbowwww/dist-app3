@@ -11,7 +11,7 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 
 	schema.add({
 		_ts: {
-		createdAt: { type: Date, required: true/*, default: () => Date.now()*/ },
+		createdAt: { type: Date, required: true, default: () => Date.now() },
 		checkedAt: { type: Date, required: false },
 		updatedAt: { type: Date, required: false },
 		deletedAt: { type: Date, required: false }
@@ -24,12 +24,17 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 	// schema.set('toObject', { getters: true, virtuals: true });
 	// schema.set('toJSON', { getters: true, virtuals: true });
 
+	// for now this works for save() and bulkSave()
+	// might also want to hook it to update middlewares to support that group of functions
 	schema.post('validate', function(doc, next) {
+		if (!doc) {
+			doc = this;
+		}
 		var model = doc.constructor;
 		if (!doc._ts.createdAt && !doc.isNew) {
-			return next(new Error(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: !doc._ts.createdAt !doc.isNew ${doc.isModified()?'':'!'}doc.isModified()`));
+			return next(new Error(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: !doc._ts.createdAt !doc.isNew ${doc.isModified()?'':'!'} doc.isModified()`));
 		} else if (doc._ts.created && doc.isNew) {
-			return next(new Error(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: doc._ts.createdAt && doc.isNew ${doc.isModified()?'':'!'}doc.isModified()`));
+			return next(new Error(`[model ${model.modelName}].post('validate')#timestampSchemaPlugin: doc._ts.createdAt && doc.isNew ${doc.isModified()?'':'!'} doc.isModified()`));
 		}
 		var now = Date.now();
 		if (doc.isNew) {

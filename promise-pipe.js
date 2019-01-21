@@ -143,14 +143,16 @@ var self = {
 				 return newData;
 			})
 			.catch(err => {
+				threadCount--;
 				Object.defineProperty(err, 'promisePipeData', { enumerable: true, value: /*_.clone*/(data) });
 				if (options.catchErrors && typeof options.catchErrors === 'function') {
 					options.catchErrors(err);
+					// process.nextTick(() =>
+					 callback();
+					 // );
+				} else {
+					process.nextTick(() => callback(err));
 				}
-				threadCount--;
-				// process.nextTick(() =>
-				 callback();
-				 // );
 			}).done();
 
 		}));/*, function(cb) {
