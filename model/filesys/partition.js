@@ -21,6 +21,8 @@ let partition = new mongoose.Schema({
 	partuuid: { type: String, required: false },											// partition UUID
 	mountpoint: { type: String, required: false },											// parttion mountpoint
 	size: { type: String, required: true },													// partition size
+}, {
+	defaultFindQuery: [ 'name', 'uuid' ]
 });
 
 
@@ -65,7 +67,7 @@ partition.static('findOrPopulate', function findOrPopulate() {
 partition.static('getPartitionForPath', function getPartitionForPath(path) {
 	return this.find().then(partitions => {
 		var partition =_.find( _.sortBy( partitions, partition => partition.mountpoint.length ), partition => path.startsWith(partition.mountpoint));
-		console.log(`partition=${inspect(partition)} partitions=${inspect(partitions)}`);
+		console.verbose(`partition=${inspect(partition)} partitions=${inspect(partitions)}`);
 		return partition;
 	});
 });

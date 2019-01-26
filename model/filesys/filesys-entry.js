@@ -50,6 +50,8 @@ fsEntry.plugin(require('../plugin/bulk-save.js'));
 fsEntry.plugin(require('../plugin/artefact.js'));
 // fsEntry.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 
+const discriminatorKey = fsEntry.get('discriminatorKey');
+
 // fsEntry.post('init', function() {
 // 	const fs = this;
 // 	const model = this.constructor.baseModelName ? mongoose.model(this.constructor.baseModelName) : this.constructor;
@@ -67,31 +69,39 @@ fsEntry.post('init', function() {
 });
 
 // fsEntry.queue()
-fsEntry.post('construct', /*async */function construct(fs/*, next*/) {
-	var model = this;
+fsEntry.queue('doCreate');
+
+fsEntry.method('doCreate', function doCreate() {
+	// var paths; 
+	// if (typeof arg === 'string') {
+	// 	paths = _.fromPairs(_.map(arg.split(' ', p => ([p, '']))));
+	// } else if (_.isArray(arg)) {
+	// 	arg = 
+	// }
+	var fs = this;
+	var model = fs.constructor;
+	discriminatorKey && fs && model && fs[discriminatorKey] && model.discriminators && model.discriminators[fs[discriminatorKey]] && (model = model.discriminators[fs[discriminatorKey]]);
 	const Dir = mongoose.model('dir');
 	const Partition = mongoose.model('partition');
 	const dirPath = nodePath.dirname(fs.path);
-	console.verbose(`fsEntry.post('construct'): fs=${inspect(fs)}, disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}`);
+	// console.log(`fsEntry.post('doCreate'): fs=${inspect(fs)}, disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}`);
+	
 	// try {
-		return Q.all([
-			(dirPath === fs.path ? null : fs.dir || Dir.findOne({ path: dirPath })).then(dir => _.set(fs, 'dir', dir ? dir._id : null)),
-			fs.partition || Partition.find({}).then(partitions => {
-				var searchPartitions =_.reverse( _.sortBy(
+		return Q.all([	
+			Q(dirPath === fs.path ? null : fs.dir || Dir.findOne({ path: dirPath })).then(dir =>
+				_.set(fs, 'dir', dir ? dir._id : null)),
+			Q(fs.partition || Partition.find({}).then(partitions => 
+				_.find( _.reverse( _.sortBy(
 					_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
-					partition => partition.mountpoint.length));
-				var part =_.find(searchPartitions, partition => fs.path.startsWith(partition.mountpoint));	
-				_.set(fs, 'partition', part ? part._id : null);
-				return fs;
-			})
+					partition => partition.mountpoint.length)),
+					partition => fs.path.startsWith(partition.mountpoint)))).then(partition => 
+				_.set(fs, 'partition', partition ? partition._id : null))
 		])
-		.tap(() => console.verbose(`[model ${model.modelName}].post('construct').populated: this=${inspect(this)}`))
-		// .then(next)//return fs;
+		.tap(() => console.verbose(`[model ${model.modelName}].post('construct').populated: fs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs=${inspect(fs)}`))
 		.catch(err => {
 			model._stats.errors.push(err);
 			console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);
 			throw err;
-			// next(err);
 		});
 });
 

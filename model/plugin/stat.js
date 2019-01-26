@@ -9,7 +9,7 @@ module.exports = function statSchemaPlugin(schema, options) {
 // TODO = custom inspect func that omits values of 0 and objects containing only 0's
 	console.debug(`statSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 
-	options = _.merge({ data: { save: {}, validate: {} } }, options);
+	options = _.merge({ data: { validate: {}, save: {}, bulkSave: {} } }, options);
 	if (schema._stats === undefined) {
 		Object.defineProperty(schema, '_stats', { enumerable: true, writeable: true, configurable: true, value: { } });
 	}
@@ -17,10 +17,16 @@ module.exports = function statSchemaPlugin(schema, options) {
 	schema.on('init', model => {
 		if (schema._stats !== undefined) {
 			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
-				_.mapValues(schema._stats, (value, key) => _.create({
+				_.create({
+					[util.inspect.custom]: function() { 
+						return _.pickBy(this, (v, k) => v.calls > 0 || v.success > 0 || v.failed > 0 || v.create > 0 || v.update > 0 || v.check > 0 || v.static > 0);
+					}
+				}, _.mapValues(schema._stats, (value, key) => _.create({
 					[util.inspect.custom]: function() {
-						return `{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total},`
-						 + 	` create: ${this.create}, update: ${this.update}, check: ${this.check}`
+						return	this.calls === 0 && this.success === 0 && this.failed === 0 &&
+								this.create === 0 && this.update === 0 && this.check === 0 && this.static === 0 ? ''
+						 : 	`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total},`
+						 + 	` create: ${this.create}, update: ${this.update}, check: ${this.check}`	// , static: ${this.static}
 						 + 	(this.errors.length === 0 ? '' : `, errors: [\n\t` + this.errors.join('\n\t') + ' ]') + ' }';
 					},
 					calls: 0,												// how many raw calls to the stat thing being counted, before succeeded or failed 
@@ -32,10 +38,11 @@ module.exports = function statSchemaPlugin(schema, options) {
 					check: 0,
 					static: 0,
 					errors: []
-				}, value))
+				}, value)))
 			});
+
 		}
-		console.debug(`schema.on('init'): model=${util.inspect(model)}`);
+		console.debug(`schema.on('init'): modelName='${model.modelName}' model._stats=${util.inspect(model._stats)}`);
 	});
 
 };

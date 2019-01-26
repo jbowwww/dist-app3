@@ -1,0 +1,11 @@
+/**
+ * Additional properties to attach to the query when calling `save()` and
+ * `isNew` is false.
+ *
+ * @api public
+ * @property $where
+ * @memberOf Model
+ * @instance
+ */
+
+Model.prototype.$where;

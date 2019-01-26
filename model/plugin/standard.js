@@ -1,12 +1,10 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
-
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('../../promise-pipe.js');
-
 const mongoose = require('mongoose');
 const Artefact = require('../../Artefact.js');
 const statPlugin = require('./stat.js');
@@ -17,81 +15,132 @@ const statPlugin = require('./stat.js');
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
+	var discriminatorKey = schema.get('discriminatorKey');
+	
 	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, schema.prototype=${inspect(schema.prototype)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
-	// schema.pre('construct', function(next) {
-	// 	var model = this;
-	// 	console.debug(`stat: [model ${model.modelName}].pre('construct'): next=${typeof next}`);// args=${inspect(args)} ${args.length}`);
-	// 	return next();
-	// });
-	// schema.post('construct', function(doc, next) {
-	// 	var model = this;
-	// 	console.debug(`stat: [model ${model.modelName}].post('construct'): doc=${inspect(doc)}`);
-	// 	return next();
-	// });
-	// schema.post('construct', function(err, doc, next) {
-	// 	var model = this;//.constructor;
-	// 	console.error(`stat: [model ${model.modelName}].post('construct') error: id=${doc && doc._id ? doc._id.toString() : '(null)'}: ${err.stack||err}`);
-	// 	model._stats.errors.push(err);
-	// 	return next(err);
-	// });
-
 	schema.static('construct', function construct(data, cb) {
-		return Q(new (this)(/*_.assign*/(data/*, { _ts: { createdAt: Date.now() } }*/)));
+		return Q(new (this)(data));
 	});
 
-	const trackedMethods = [ "validate", "save", "bulkSave", "upsert" ];
+	const trackedMethods = [ "validate", "save", "bulkSave"/*, "upsert" */];
 	schema.plugin(statPlugin, { data: _.fromPairs(_.map(trackedMethods, methodName => ([methodName, {}]))) });
-
-	/* would use a regex to match everything but i can't see any way to then get the actual event name??
-	 * add more as they become useful. I'm not sure save/bulkSave are very useful because of mongoose not firing middleware from it's bulkSave and me doing it custom
-	 */
-	_.forEach(trackedMethods, methodName => {
+	_.forEach(trackedMethods, function(methodName) {
 		
 		schema.pre(methodName, function(next) {
-			var doc = this;
-			var model = doc instanceof mongoose.Document ? doc.constructor : this;
-			if (!doc && arguments[0] instanceof mongoose.Document) {
-				doc = arguments[0];
-			}
+			var doc = this instanceof mongoose.Document ? this : null;
+			var model = doc ? doc.constructor : this;
+			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
 			var eventName = 'pre.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			var actionType = doc instanceof mongoose.Document ? doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' : 'static';
-			model._stats[methodName].calls++;
-			model._stats[methodName][actionType]++;
-			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${doc._id} doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc._actions=${inspect(doc._actions)}
+			if (model) {
+				model.emit(eventName, doc);
+				model._stats[methodName].calls++;
+			}
+			if (doc) {
+				doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+				var actionType = /*doc instanceof mongoose.Document ?*/ doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' /*: 'static'*/;
+				model._stats[methodName][actionType]++;
+			}
+			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc=${doc._id}  doc._actions=${inspect(doc._actions)}
 			next();
 		});
 
 		schema.post(methodName, function(res, next) {
-			var doc = this;
-			var model = doc instanceof mongoose.Document ? doc.constructor : this;
-			if (!doc && arguments[0] instanceof mongoose.Document) {
-				doc = arguments[0];
-			}
+			var doc = this instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
+			var model = doc ? doc.constructor : this;
+			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
 			var eventName = 'post.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			model._stats[methodName].success++;
-			console.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
+			if (model) {
+				model.emit(eventName, doc, res);
+				model._stats[methodName].success++;
+			}
+			if (doc) {
+				doc.emit(eventName, res);			// i wonder what this gets bound as? in any case shuld be the doc
+			}
+			console.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
 
 		schema.post(methodName, function(err, res, next) {
-			var doc = this;
-			var model = doc instanceof mongoose.Document ? doc.constructor : this;
-			if (!doc && arguments[0] instanceof mongoose.Document) {
-				doc = arguments[0];
-			}
-			var eventName = 'err.' + methodName;
-			model.emit(eventName, doc);
-			doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-			model._stats[methodName].errors.push(err);
-			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
+			var doc = this;// instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
+			var model = /*doc ?*/ doc.constructor/* : this*/;
+			// console.log(`[doc ${model.modelName}].post('${methodName}'): #1 doc.path='${doc.path}'`);
+			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
+
+			// console.log(`[doc ${model.modelName}].post('${methodName}'): #2 doc.path='${doc.path}'`);
+						var eventName = 'err.' + methodName;
+
+			// console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
+			// if (model) {
+			// 	model.emit(eventName, doc, err);
+				model._stats[methodName].errors.push(err);
+			// }
+			// if (doc) {
+				doc.emit(eventName, err);			// i wonder what this gets bound as? in any case shuld be the doc
+			// }
+			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 			return next(err);
 		});
 
+	});
+
+	schema.plugin(statPlugin, { data: { upsert: {} } });
+
+	schema.pre('upsert', function(next, doc) {
+		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
+		// var doc = this;
+		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
+		// if (!doc && arguments[0] instanceof mongoose.Document) {
+		// 	doc = arguments[0];
+		// }
+			// if (discriminatorKey && doc && doc[discriminatorKey] && model.discriminators[doc[discriminatorKey]]) {
+			// 	model = model.discriminators[doc[discriminatorKey]];
+			// }
+		var eventName = 'pre.upsert';
+		model.emit(eventName, doc);
+		// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+		// var actionType = doc instanceof mongoose.Document ? doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' : 'static';
+		model._stats.upsert.calls++;
+		next();
+	});
+
+	schema.post('upsert', function(res, next) {
+		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
+		// var doc = this;
+		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
+		// if (!doc && arguments[0] instanceof mongoose.Document) {
+		// 	doc = arguments[0];
+		// }
+			// if (discriminatorKey && doc[discriminatorKey] && model.discriminators[doc[discriminatorKey]]) {
+			// 	model = model.discriminators[doc[discriminatorKey]];
+			// }
+		var eventName = 'post.upsert';
+		model.emit(eventName, res);
+		// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+		var actionType = res.upserted && res.upserted.length > 0 ? 'create' : res.nModified > 0 ? 'update' : 'check';
+		model._stats.upsert[actionType]++;
+		console.debug(`[model ${model.modelName}].post('upsert'): res=${inspect(res)} model._stats.upsert=${inspect(model._stats.upsert)}`);	// doc=${inspect(doc)} doc._actions=${inspect(doc._actions)}
+		next();
+	});
+
+	schema.post('upsert', function(err, res, next) {
+		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
+		// var doc = this;
+		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
+		// if (!doc && arguments[0] instanceof mongoose.Document) {
+		// 	doc = arguments[0];
+		// }
+			// if (discriminatorKey && doc[discriminatorKey] && model.discriminators[doc[discriminatorKey]]) {
+			// 	model = model.discriminators[doc[discriminatorKey]];
+			// }
+		var eventName = 'err.upsert';
+		model.emit(eventName, res, err);
+		// doc.emit(eventName, err);			// i wonder what this gets bound as? in any case shuld be the doc
+		model._stats.upsert.errors.push(err);
+		console.error(`[model ${model.modelName}].post('upsert') ERROR: res=${inspect(res)} model._stats.upsert=${inspect(model._stats.upsert)}: error: ${err.stack||err}`);
+		if (typeof next === 'function') {
+			return next(err);
+		}
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
@@ -131,12 +180,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * when it's called - but it will only get called if the data 2wasn't found first. Saves expensive operations if unnecessary. (like mm.parseFile())) 
 	 * !! Hold on - the use case here for Audio is different to File. Even if a File is found this method still does updateDocument(data),
 	 * whereas with Audio I think I just want to skip it completley - unless the file has changed more recently than the Audio document was updated/checked 
-	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... */
-	schema.static('findOrCreate', function findOrCreate(...args) { // [query, ] data[, options][, cb]) {
+	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... 
+	 * args: // [query, ] data[, options][, cb] */
+	schema.static('findOrCreate', function findOrCreate(...args) {
 
 		var cb, query, data, model, options = {
-			saveImmediate: false,		// if true, calls doc.save() immediately after creation or after finding the doc 
-			query: undefined					// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
+			saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
+			query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
 		};
 		_.forEach(args, (arg, i) => {
 			if (cb) {
@@ -154,8 +204,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 				throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Unexpected parameter type ${typeof arg} for arg #${i}. (args=${inspect(args)})`);
 			}
 		});
-		var dk = schema.get('discriminatorKey');
-		model = dk && data[dk] && this.discriminators[data[dk]] ? this.discriminators[data[dk]] : this;
+		model = discriminatorKey && data[discriminatorKey] && this.discriminators[data[discriminatorKey]] ? this.discriminators[data[discriminatorKey]] : this;
 		
 		// I don't think the parsing/defaulting logic here is correct
 		if (!options.query) {
@@ -165,17 +214,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			options.query = _.pick(data, options.query);	
 		} else if (_.isObject(options.query)) {
 			options.query = _.mapValues(schema.get('defaultFindQuery'), (v, k) => v === undefined ? data[k] : v);
-			// _.assign(
-			// 	_.pick(data, _.filter(options.query, (value, key) => value == undefined)),
-			// 	_.pick(options.query, _.filter(options.query, (value, key) => value !== undefined)));
 		}
-		console.verbose(`[model ${model.modelName}(dk=${dk})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[dk]}': setting model='${/*inspect*/(model.modelName)}'`);
+		console.verbose(`[model ${model.modelName}(dk=${discriminatorKey})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[discriminatorKey]}': setting model='${/*inspect*/(model.modelName)}'`);
 
-		// var q = model.findOneAndUpdate(query, data, { upsert: true });
-		return Q(model.findOne(options.query))
-		.then(r => r ? r.updateDocument(data) : model.construct(data))
-		// .then(doc => _.set(doc, '_actions', {}))
-		.then(doc => options.saveImmediate ? doc.save() : doc);
+		return Q(model.findOne(options.query))									// var q = model.findOneAndUpdate(query, data, { upsert: true });
+		.then(r => r ? r.updateDocument(data) : /*model.construct*/new (model)(data))			// .then(doc => _.set(doc, '_actions', {}))
+		.then(doc => options.saveImmediate ? doc.save() : doc);	
+
 	});
 
 /*	function parseArgs(...args) {
@@ -202,18 +247,14 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.static('upsert', function upsert(...args) {
 
 		var [ doc, options, cb ] = args;	// doc may be a mongoose doc or  POJO
-		var dk = schema.get('discriminatorKey');
-		var discriminator = dk ? doc[dk] : undefined;
-		var model = dk && discriminator && this.discriminators[discriminator] ? this.discriminators[discriminator] : this;
-		var debugPrefix = `[model ${model.modelName}].upsert:`;//${dk?`(dk=${dk})`:''}]`;
-		console.log(`${debugPrefix} doc=${inspect(doc)} options=${inspect(options)} cb=${cb}`);
+		// var discriminatorKey = schema.get('discriminatorKey');
+		var discriminator = discriminatorKey ? doc[discriminatorKey] : undefined;
+		var model = discriminatorKey && discriminator && this.discriminators[discriminator] ? this.discriminators[discriminator] : this;
 
-		
-		if (!(doc instanceof mongoose.Document)) {
-			if (!_.isObject(doc)) {
+		var debugPrefix = `[model ${model.modelName}].upsert:`;//${discriminatorKey?`(discriminatorKey=${discriminatorKey})`:''}]`;
+
+		if (!(doc instanceof mongoose.Document) && !_.isObject(doc)) {
 				throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:(object doc[, object options][, function cb]) received:${inspect(args)}`);
-			}
-			doc = new model(doc);
 		}
 		if (typeof options === 'function') {
 			if (!cb) {
@@ -236,11 +277,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		}
 		options = _.assign(_.omit(options, 'query'), { upsert: true });
 
-		console.verbose(`${debugPrefix} options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} doc=${inspect(doc)}`);
+		console.verbose(`${debugPrefix} options=${inspect(options, { depth: 3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} doc=${inspect(doc, { depth: 1, compact: false })}`);
 
-		return Q(model.updateOne.call(model, q, doc, options, cb))
-		.then(() => null);
-		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
+		return Q(model.updateOne.call(model, q, doc, options, cb))/*.then(() => null)*/;		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
 
 	});
 
@@ -249,8 +288,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var [ options, cb ] = args;	// doc may be a mongoose doc or  POJO
 		var doc = this;
 		var model = doc.constructor;
-		var debugPrefix = `[doc ${model.modelName}].upsert:`;//${dk?`(dk=${dk})`:''}]`;
-		console.log(`${debugPrefix} doc=${inspect(doc)} options=${inspect(options)} cb=${cb}`);
+
+		var debugPrefix = `[doc ${model.modelName}].upsert:`;//${discriminatorKey?`(discriminatorKey=${discriminatorKey})`:''}]`;
 
 		if (!(doc instanceof mongoose.Document) && !_.isObject(doc)) {
 			throw new TypeError(`Incorrect argument types for ${debugPrefix} expected:([object options][, function cb]) received:${inspect(args)}`);
@@ -276,11 +315,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		}
 		options = _.assign(_.omit(options, 'query'), { upsert: true });
 
-		console.verbose(`${debugPrefix} options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} doc=${inspect(doc)}`);
+		console.verbose(`${debugPrefix} options=${inspect(options, { depth: 3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} doc=${inspect(doc, { depth: 1, compact: false })}`);
 
-		return Q(model.updateOne.call(model, q, doc, options, cb))
-		.then(() => null);
-		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
+		return Q(model.updateOne.call(model, q, doc, options, cb))/*.then(() => null)*/;		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
 
 	});
 
