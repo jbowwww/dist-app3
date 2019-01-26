@@ -1,4 +1,13 @@
 
+190127
+At this point, if you focus you should be close to having something that can be somewhat useful
+Current issues to resolve first -
+	in post creation handler for fsEntry, only fileType:"file" instances seem to be getting the dir/partition fields set
+	Also since you rewrote Disk.findOrPopulate tonight, partition doesn't seem to be getting populated at all now
+	Both disk and partition need to be kept in local variables and used efficiently
+		- currently setting a objectid ref field in the instances, and populating it, which seems to work well
+		- could using virtuals or getters provide any advantages? (if not, get to using this thing, don't do it just to try it and go around in time consuming circles) 
+
 181222
 Occasionally getting a mongodb  : no operation specified error - think its my recently modified bulkSave ending up with an empty array somehow - check concurrency issues
 

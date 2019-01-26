@@ -32,24 +32,44 @@ disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
 // dosk.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 
+var disks, partitions;
+
 disk.static('findOrPopulate', function findOrPopulate() {
-	return getDevices().then(disks => {
-		console.verbose(`disks=${inspect(disks)}`);
-		return Q.all(_.map(disks, disk => this.findOrCreate(disk, { saveImmediate: true })
-			.then(diskDoc => (function mapPartitions(container, containerPartitionDoc) {
-				return Q.all(_.map(container.children, partition => {
-					_.assign(partition, { disk: diskDoc, container: containerPartitionDoc/*Id*/ });
-					return Partition.findOrCreate(partition, { saveImmediate: true })
-						.tap(partitionDoc => console.verbose(`diskDoc=${inspect(diskDoc)} partitionDoc=${inspect(partitionDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)}`))
-						.then(partitionDoc => mapPartitions(partition, partitionDoc));;
-				}));
-			})(disk))
-		))
-		.catch(e => {
-			console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
-			throw e;
-		});
+	
+	var model = this;
+	var debugPrefix = `[model ${model.modelName}].findOrPopulate()`;
+
+	var dbOpt = { saveImmediate: true };
+
+	return getDevices()
+	.then(jsonDevices => { console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`); })
+
+	.then(jsonDevices => Q.all(_.map(jsonDevices, disk =>
+		this.findOrCreate(disk, dbOpt)
+		.then(diskDoc => (function mapPartitions(container, containerPartitionDoc) {
+			return Q.all(_.map(container.children, partition =>
+				Partition.findOrCreate(_.assign(partition, { disk: diskDoc, container: containerPartitionDoc}), dbOpt)
+				.tap(partitionDoc => console.verbose(`partitionDoc=${inspect(partitionDoc)}`))		// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
+				.then(partitionDoc => mapPartitions(partition, partitionDoc)) )); 
+		})(disk))
+	)))
+	
+	// these collections should be relatively small, and will be referred to by all fsEntry objects, so cache locally
+	.then(() => Q.all([
+		this.find({}).then(_disks => disks = _disks),
+		Partition.find({}).then(_partitions => partitions = _partitions)
+	]))
+	.then(() => {
+		console.verbose(`${debugPrefix}: devices[${disks.length}] = ${inspect(disks)}\n`
+		 + `partitions[${partitions.length}] = ${inspect(partitions.length)}`);
+	})
+
+	.catch(e => {
+		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
+		model._stats.errors.push(err);
+		throw e;
 	});
+
 });
 
 disk.static('getPartitionForPath', function getPartitionForPath(path) {

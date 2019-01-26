@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -71,38 +71,35 @@ fsEntry.post('init', function() {
 // fsEntry.queue()
 fsEntry.queue('doCreate');
 
+// I think this fires on creation of any document, whether retrieved from DB or newly created
+// So more like a constructor
 fsEntry.method('doCreate', function doCreate() {
-	// var paths; 
-	// if (typeof arg === 'string') {
-	// 	paths = _.fromPairs(_.map(arg.split(' ', p => ([p, '']))));
-	// } else if (_.isArray(arg)) {
-	// 	arg = 
-	// }
+
+	// Is it worth extracting the doc/model(and query/update middleware) boilerplate variable setting code and putting in one place?
+	// create a handful of schema methods for creating different types /tempaltes of methods, which takes care of the doc, model(&discriminator) etc variables
+	 
 	var fs = this;
 	var model = fs.constructor;
 	discriminatorKey && fs && model && fs[discriminatorKey] && model.discriminators && model.discriminators[fs[discriminatorKey]] && (model = model.discriminators[fs[discriminatorKey]]);
 	const Dir = mongoose.model('dir');
 	const Partition = mongoose.model('partition');
-	const dirPath = nodePath.dirname(fs.path);
-	// console.log(`fsEntry.post('doCreate'): fs=${inspect(fs)}, disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}`);
+	console.verbose(`[model ${model.modelName}].pre('doCreate'): disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs.fileType='${fs.fileType}' fs=${inspect(fs)})\n`);
 	
-	// try {
-		return Q.all([	
-			Q(dirPath === fs.path ? null : fs.dir || Dir.findOne({ path: dirPath })).then(dir =>
-				_.set(fs, 'dir', dir ? dir._id : null)),
-			Q(fs.partition || Partition.find({}).then(partitions => 
-				_.find( _.reverse( _.sortBy(
-					_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
-					partition => partition.mountpoint.length)),
-					partition => fs.path.startsWith(partition.mountpoint)))).then(partition => 
-				_.set(fs, 'partition', partition ? partition._id : null))
-		])
-		.tap(() => console.verbose(`[model ${model.modelName}].post('construct').populated: fs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs=${inspect(fs)}`))
-		.catch(err => {
-			model._stats.errors.push(err);
-			console.warn(`[model ${model.modelName}].post('construct'): error: ${err.stack||err}`);
-			throw err;
-		});
+	// TODO: Query helper method that caches queries - e.g. Dir.findOne({ path: '...' }).useCache().then(dir => { })
+	return Q(fs.dir || Dir.findOne({ path: nodePath.dirname(fs.path) }))
+	.then(dir => dir ? _.assign(fs, { dir, partition: dir.partition }) :
+		Partition.find({}).then(partitions => _.find( _.reverse( _.sortBy( 
+			_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
+			partition => partition.mountpoint.length)),
+			partition => fs.path.startsWith(partition.mountpoint)))
+		.then(partition => _.assign(fs, { partition })))
+
+	.tap(() => console.verbose(`[model ${model.modelName}].post('doCreate'): fs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs.fileType='${fs.fileType}' fs=${inspect(fs)}`))
+	.catch(err => {
+		model._stats.errors.push(err);
+		console.warn(`[model ${model.modelName}].post('doCreate'): error: ${err.stack||err}`);
+		throw err;
+	});
 });
 
 fsEntry.method('hasFileChanged', function() {

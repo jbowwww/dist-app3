@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -84,9 +84,21 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	});
 
+	// custom validation waits until creation tasks are completed before returning (and allowing save, bulkSave)
+	// schema.post('init', function(doc, next) {
+	// 	var doc = this;
+	// 	var model = doc.constructor;// && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
+	// 	Object.defineProperty(doc, '_init', { writeable: true, value: Q.defer(); });
+
+	// });
+
+	// schema.pre('validate', function(doc, next) {
+
+	// });
+
 	schema.plugin(statPlugin, { data: { upsert: {} } });
 
-	schema.pre('upsert', function(next, doc) {
+	schema.pre('upsert', function(doc, next) {
 		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
 		// var doc = this;
 		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
@@ -244,6 +256,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		}
 	}*/
 
+	// What is the difference between these methods and findOrCreate?? I think there was something but it may
+	// be so subtle and minor that it is not worth having both
 	schema.static('upsert', function upsert(...args) {
 
 		var [ doc, options, cb ] = args;	// doc may be a mongoose doc or  POJO
