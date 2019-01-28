@@ -39,7 +39,7 @@ var searches = [
 	// { path: '/mnt/Storage', maxDepth: 0 },
 	// { path: '/media/jk/Backup/RECOVERED_FILES/mystuff/Backup', maxDepth: 0 },
 	// { path: '/media/jk/My Passport', maxDepth: 0 },
-	{ path: '/home/jk', maxDepth: 1 }
+	{ path: '/mnt/media', maxDepth: 0 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
