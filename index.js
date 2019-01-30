@@ -30,7 +30,7 @@ process.on('uncaughtException', (err) => {
 });
 process.on('beforeExit', () => {
 	if (errors && errors.length > 0) {
-		fs.writeSync(fs.createWriteStream('errors.txt', errors.join('\n')));
+		fs.appendFileSync('errors.txt', errors.join('\n'));
 	}
 });
 
@@ -81,13 +81,15 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 // (artefact still needs an initial mongo doc (newly created or retrieved) to go and find other types associated with the artefact)
 // (how to map dependencies/ordering of type construction in artefacts? e.g. file -> audio -> sample)
  
-.then(() => Disk.findOrPopulate())// .catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
+.then(() => Disk.findOrPopulate()
+.catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
 
 .then(() => Q.all( _.map( searches, search =>
 	fsIterate(search).promisePipe(promisePipeOptions,
 		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
 		fse => FsEntry.findOrCreate(fse),
-		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave() ) )))
+		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
+		 ) )))
 
 // .then(async function() {
 // 	for await (const f of File.find({ hash: { $exists: false } }).cursor()) {

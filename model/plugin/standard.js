@@ -230,7 +230,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		console.verbose(`[model ${model.modelName}(dk=${discriminatorKey})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[discriminatorKey]}': setting model='${/*inspect*/(model.modelName)}'`);
 
 		return Q(model.findOne(options.query))									// var q = model.findOneAndUpdate(query, data, { upsert: true });
-		.then(r => r ? r.updateDocument(data) : /*model.construct*/new (model)(data))			// .then(doc => _.set(doc, '_actions', {}))
+		.then(r => r ? r.updateDocument(data) : /*model.create*/ /*model.construct*/ new (model) (data))			// .then(doc => _.set(doc, '_actions', {}))
 		.then(doc => options.saveImmediate ? doc.save() : doc);	
 
 	});
@@ -334,6 +334,25 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		return Q(model.updateOne.call(model, q, doc, options, cb))/*.then(() => null)*/;		// or could also use bulkSave?  and use Query.prototype.getUpdate() / getQuery()
 
 	});
+
+schema.query.useCache = function useCache() {
+
+	var q = this.getQuery();
+	var jq = JSON.stringify(q);
+	var r = schema._cache.get(jq);
+	if (!r) {
+		console.verbose(`useCache: new q '${inspect(q, { compact: true })}'`);
+		return this.exec().then(r => {
+			schema._cache.set(jq, r);
+			return Q(r);
+		});
+	} else {
+		console.verbose(`useCache: found '${inspect(q, { compact: true })}'`);
+		return Q(r);
+	}
+};
+
+schema._cache = new Map();
 
 	schema.query.promisePipe = function promisePipe(...promiseFuncs) {
 		return streamPromise(writeablePromiseStream(...promiseFuncs), { resolveEvent: 'finish' });

@@ -3,6 +3,7 @@
 
 const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'log' });	// verbose debug log
 const stream = require('stream');
+const pipeline = stream.pipeline;
 const _ = require('lodash');
 const inspect = require('util').inspect;
 const Q = require('q');
@@ -61,7 +62,7 @@ var self = {
 		 * 	  and/or the stream data to get buffered, as it will not call the callback for stream.Writeable.write until the promiseChain is fulfilled
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
 		var writeable = self.writeablePromiseStream(options, ...promiseFunctions);
-		var thenable = self.streamPromise(sourceStream.pipe(writeable), { resolveEvent: 'finish' });
+		var thenable = self.streamPromise(pipeline(sourceStream, writeable), { resolveEvent: 'finish' });
 		// _.set(writeable, 'promisePipe', function promisePipe(...args) {
 		// 	console.debug(`writeable.promisePipe(): this=${inspect(this)} writeable=${inspect(writeable)} thenable=${inspect(thenable)}`);
 		// 	writeable.options.dataThru = true;

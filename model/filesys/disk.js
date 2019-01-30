@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const { promisifyMethods } = require('../../utility.js');
@@ -32,7 +32,7 @@ disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
 // dosk.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 
-var disks, partitions;
+var disks = [], partitions = [];
 
 disk.static('findOrPopulate', function findOrPopulate() {
 	
@@ -42,23 +42,25 @@ disk.static('findOrPopulate', function findOrPopulate() {
 	var dbOpt = { saveImmediate: true };
 
 	return getDevices()
-	.then(jsonDevices => { console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`); })
+	.then(jsonDevices => { console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`); return jsonDevices; })
 
 	.then(jsonDevices => Q.all(_.map(jsonDevices, disk =>
-		this.findOrCreate(disk, dbOpt)
+		model.findOrCreate(disk, dbOpt)
 		.then(diskDoc => (function mapPartitions(container, containerPartitionDoc) {
-			return Q.all(_.map(container.children, partition =>
+			disks.push(diskDoc);
+			return !container || !container.children ? Q(null) : Q.all(_.map(container.children, partition => 
 				Partition.findOrCreate(_.assign(partition, { disk: diskDoc, container: containerPartitionDoc}), dbOpt)
+				.tap(partitionDoc => partitions.push(partitionDoc))
 				.tap(partitionDoc => console.verbose(`partitionDoc=${inspect(partitionDoc)}`))		// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
 				.then(partitionDoc => mapPartitions(partition, partitionDoc)) )); 
 		})(disk))
 	)))
 	
 	// these collections should be relatively small, and will be referred to by all fsEntry objects, so cache locally
-	.then(() => Q.all([
-		this.find({}).then(_disks => disks = _disks),
-		Partition.find({}).then(_partitions => partitions = _partitions)
-	]))
+	// .then(() => Q.all([
+	// 	model.find({}).then(_disks => disks = _disks),
+	// 	Partition.find({}).then(_partitions => partitions = _partitions)
+	// ]))
 	.then(() => {
 		console.verbose(`${debugPrefix}: devices[${disks.length}] = ${inspect(disks)}\n`
 		 + `partitions[${partitions.length}] = ${inspect(partitions.length)}`);
