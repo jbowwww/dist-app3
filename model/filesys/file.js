@@ -14,7 +14,7 @@ let file = new mongoose.Schema({
 	hashUpdated: { type: Date, /*default: 0,*/ required: false }
 });
 
-file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
+file.plugin(require('../plugin/stat.js'), { data: { instance: ['ensureCurrentHash'] } });
 
 
 // file.post('save', async function() {

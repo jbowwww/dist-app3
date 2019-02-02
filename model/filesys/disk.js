@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const { promisifyMethods } = require('../../utility.js');
@@ -9,7 +9,8 @@ const hashFile = require('../../fs/hash.js');
 const mongoose = require('mongoose');
 const Q = require('q');
 const getDevices = require('../../fs/devices.js');
-const { Partition } = require('./index.js');//mongoose.model('partition');// require('./partition.js');
+// const Fs = require('./index.js');//mongoose.model('partition');// require('./partition.js');
+// const { Partition } = Fs;
 
 let disk = new mongoose.Schema({
 	name: { type: String, required: true },
@@ -28,7 +29,7 @@ let disk = new mongoose.Schema({
 disk.plugin(require('../plugin/custom-hooks.js'));
 disk.plugin(require('../plugin/timestamp.js'));
 disk.plugin(require('../plugin/standard.js'));
-disk.plugin(require('../plugin/bulk-save.js'));
+// disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
 // dosk.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 
@@ -36,13 +37,15 @@ var disks = [], partitions = [];
 
 disk.static('findOrPopulate', function findOrPopulate() {
 	
+	const Partition = mongoose.model('partition');
+
 	var model = this;
 	var debugPrefix = `[model ${model.modelName}].findOrPopulate()`;
 
 	var dbOpt = { saveImmediate: true };
 
 	return getDevices()
-	.then(jsonDevices => { console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`); return jsonDevices; })
+	.then(jsonDevices => { console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`); return jsonDevices;})
 
 	.then(jsonDevices => Q.all(_.map(jsonDevices, disk =>
 		model.findOrCreate(disk, dbOpt)

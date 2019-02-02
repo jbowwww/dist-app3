@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/custom-hooks.js', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/custom-hooks.js', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -50,8 +50,7 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 			throw new TypeError('fn should be a function');
 		}
 		const schemaHooksExecPost = Q.denodeify(schema.s.hooks.execPost.bind(schema.s.hooks));
-		return mongoose.Schema.prototype.method.call(this, name,
-			options.noCustomMiddleware ? fn : function(...args) {
+		return mongoose.Schema.prototype.method.call(this, name, options.noCustomMiddleware ? fn : function(...args) {
 			const doc = this;
 			const model = doc.constructor;
 			const modelName = model.modelName;

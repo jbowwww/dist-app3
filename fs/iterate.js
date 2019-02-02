@@ -17,7 +17,8 @@ const pathDepth = require('./path-depth.js');
 module.exports = {
 
 	createFsItem, iterate };
-
+	
+	// TODO: Move this to models/filesys/index to a Fs.iterate() method
 	function createFsItem(path) {
 		return nodeFs.lstat(path).then(stats => ({
 			path: /*nodePath.resolve*/(path),
@@ -81,7 +82,6 @@ module.exports = {
 							var currentDepth = item.pathDepth; - self.rootDepth;	// +1 because below here next files are read from this dir
 							if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootDepth))/* && (!options.filter || options.filter(item))*/) {
 								nodeFs.readdir(item.path).then(names => {
-									// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 									console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
 									_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
 									/*return*/ self.push(item);
@@ -94,11 +94,8 @@ module.exports = {
 
 					function nextHandleError(err) {
 						options.handleError(err);
-						self.errors.push(err);
-						// process.nextTick(() =>
-						 // self.emit('error', err);
-						 // );
-						return next();//1;
+						self.errors.push(err); // process.nextTick(() => // self.emit('error', err);// );
+						return next();
 					}
 
 				})();

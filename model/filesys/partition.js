@@ -29,7 +29,7 @@ let partition = new mongoose.Schema({
 partition.plugin(require('../plugin/custom-hooks.js'));
 partition.plugin(require('../plugin/timestamp.js'));
 partition.plugin(require('../plugin/standard.js'));
-partition.plugin(require('../plugin/bulk-save.js'));
+// partition.plugin(require('../plugin/bulk-save.js'));
 partition.plugin(require('../plugin/artefact.js'));
 // partition.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 

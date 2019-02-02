@@ -1,7 +1,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'log' });	// verbose debug log
+const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'debug' });	// verbose debug log
 const stream = require('stream');
 const pipeline = stream.pipeline;
 const _ = require('lodash');
@@ -10,7 +10,10 @@ const Q = require('q');
 const pEvent = require('p-event');
 const through2Concurrent = require('through2-concurrent');
 
-const defaultCatch = err => { console.warn(`promisePipe error${err.promisePipeData ? (' (data: [' + typeof err.promisePipeData + '] ' + inspect(err.promisePipeData, { compact: true }) + ')') : ''}: ${err.stack||err}`); };
+const defaultCatch = err => {
+	console.warn(`promisePipe error${!err.promisePipeData ? '' :
+	 ' (data: [' + typeof err.promisePipeData + '] ' + inspect(err.promisePipeData, { compact: true }) + ')'}: ${err.stack||err}`);
+};
 const defaultOptions = {
 	catchErrors: defaultCatch,
 	emitStreamErrors: false,
@@ -91,7 +94,7 @@ var self = {
 	},
 
 	writeablePromiseStream(...args/*[options,] ...promiseFunctions */) {
-		var options, promiseFunctions = [], promiseChain;
+		var options = _.clone(defaultOptions), promiseFunctions = [], promiseChain;
 
 		_.forEach(args, (arg, i) => {
 			if (_.isArray(arg) && _.every(arg, element => _.isFunction(element))) {
@@ -100,7 +103,7 @@ var self = {
 				if (promiseFunctions.length > 0) {
 					throw new TypeError('promisePipe: arguments must end with promise functions');
 				}
-				options = arg;
+				options = _.merge(options, arg);
 			} else if (typeof arg === 'function') {
 				promiseFunctions.push(arg);
 			} else {
@@ -110,7 +113,6 @@ var self = {
 		if (typeof options.catchErrors === 'boolean' && options.catchErrors) {
 			delete options.catchErrors;	// unset so default gets set
 		}
-		options = _.defaults(options, defaultOptions);
 
 		// var threads = new Queue();//Array(options.concurrency);
 		var threadCount = 0;

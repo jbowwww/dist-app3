@@ -6,7 +6,6 @@ const Q = require('q');
 const nodeFs = require('fs');
 const nodePath = require('path');
 const mongoose = require('mongoose');
-// const standardPlugin = require('../plugin/standard.js');
 	
 var statSchema = new mongoose.Schema({
 	"dev" : Number,
@@ -46,12 +45,15 @@ var fsEntry = new mongoose.Schema({
 fsEntry.plugin(require('../plugin/custom-hooks.js'));
 fsEntry.plugin(require('../plugin/timestamp.js'));
 fsEntry.plugin(require('../plugin/standard.js'));
-fsEntry.plugin(require('../plugin/bulk-save.js'));
+// fsEntry.plugin(require('../plugin/bulk-save.js'));
 fsEntry.plugin(require('../plugin/artefact.js'));
 // fsEntry.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
 
 const discriminatorKey = fsEntry.get('discriminatorKey');
 
+fsEntry.virtual('isDirectory').get(function() {
+	return this.fileType === 'dir';
+})
 // fsEntry.post('init', function() {
 // 	const fs = this;
 // 	const model = this.constructor.baseModelName ? mongoose.model(this.constructor.baseModelName) : this.constructor;
@@ -91,9 +93,9 @@ fsEntry.method('doCreate', function doCreate() {
 	console.verbose(`[model ${model.modelName}].pre('doCreate'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh}) disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs.fileType='${fs.fileType}' fs=${inspect(fs)})\n`);
 	
 	// TODO: Query helper method that caches queries - e.g. Dir.findOne({ path: '...' }).useCache().then(dir => { })
-	return Q(fs.dir || Dir.find().findOne({ path: nodePath.dirname(fs.path) }).useCache()
+	return Q(fs.dir || Dir/*.find()*/.findOne({ path: nodePath.dirname(fs.path) })/*.useCache()*/
 	.then(dir => dir ? _.assign(fs, { dir: dir._id, partition: dir.partition?dir.partition._id:undefined }) :
-		Partition.find({}).useCache().then(partitions => _.find( _.reverse( _.sortBy( 
+		Partition.find({})./*useCache().*/then(partitions => _.find( _.reverse( _.sortBy( 
 			_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
 			partition => partition.mountpoint.length)),
 			partition => fs.path.startsWith(partition.mountpoint)))

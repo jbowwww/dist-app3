@@ -1,20 +1,44 @@
 "use strict";
-
 const console = require('../../stdio.js').Get('model/fs/filesys', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
-// const _ = require('lodash');
+// const { pipeline } = require('stream');
+const pPipe = require('p-pipe');
+const _ = require('lodash');
 // const Q = require('q');
-// const { createFsItem, iterate } = require('../../fs/iterate.js');
+const { /*createFsItem,*/ iterate } = require('../../fs/iterate.js');
 
-// const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, ifPipe, conditionalTap, streamPromise }  = require('../../promise-pipe.js');
+const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, ifPipe, conditionalTap, streamPromise }  = require('../../promise-pipe.js');
+const { pipeline } = require('stream');
 
 const mongoose = require('mongoose');
 
-const FsEntry = require('./filesys-entry.js');
-const Disk = require('./disk.js');
-const Dir = require('./dir.js');
-const File = require('./file.js');
-const Partition = require('./partition.js');
+var Disk = require('./disk.js');
+var Partition = require('./partition.js');
+var FsEntry = require('./filesys-entry.js');
+var Dir = require('./dir.js');
+var File = require('./file.js');
+
+
+module.exports = {
+		Disk,
+		Partition,
+		FsEntry,
+		Dir,
+		File,
+
+	enumerate(options) {
+		// options = _.merge({
+		// 	handleError(err) {
+				
+		// 	}
+		// })
+		return promisePipe( iterate(options), /*.pipe(*/
+			// writeablePromiseStream(/*{ dataThru: true },*/
+			 fsEntry => /*this.*/FsEntry.findOrCreate(fsEntry))
+			  // );
+	}
+
+};
 
 // const Artefact = require('../../Artefact.js');
 
@@ -36,9 +60,3 @@ const Partition = require('./partition.js');
 // 		.then(debug('fsIterate(${inspect(search, {compact:true})}) return: '))))
 // 	.then(`Finished ${options.searches.length} searches`);
 // };
-
-module.exports.FsEntry = FsEntry;
-module.exports.Disk = Disk;
-module.exports.Dir = Dir;
-module.exports.File = File;
-module.exports.Partition = Partition;
