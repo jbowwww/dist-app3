@@ -69,42 +69,36 @@ fsEntry.post('init', function() {
 });
 
 // fsEntry.queue()
-fsEntry.queue('doCreate');
+// fsEntry.queue('doCreate');
 
 var doCreateLevel = 0;
 var doCreateLevelHigh = 0;
 
 // I think this fires on creation of any document, whether retrieved from DB or newly created
 // So more like a constructor
-fsEntry.method('doCreate', function doCreate() {
+fsEntry.post('construct', function doCreate(doc, next) {
 
 	// Is it worth extracting the doc/model(and query/update middleware) boilerplate variable setting code and putting in one place?
 	// create a handful of schema methods for creating different types /tempaltes of methods, which takes care of the doc, model(&discriminator) etc variables
 	 if (++doCreateLevel > doCreateLevelHigh) {
 	 	doCreateLevelHigh = doCreateLevel;
 	 }
-	var fs = this;
-	var model = fs.constructor;
-	discriminatorKey && fs && model && fs[discriminatorKey] && model.discriminators && model.discriminators[fs[discriminatorKey]] && (model = model.discriminators[fs[discriminatorKey]]);
+	var model = doc.constructor;
+	discriminatorKey && doc && model && doc[discriminatorKey] && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
 	const Dir = mongoose.model('dir');
 	const Partition = mongoose.model('partition');
-	console.verbose(`[model ${model.modelName}].pre('doCreate'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh}) disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs.fileType='${fs.fileType}' fs=${inspect(fs)})\n`);
+	// console.verbose(`[model ${model.modelName}].post('construct'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh}) disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)})\n`);
 	
 	// TODO: Query helper method that caches queries - e.g. Dir.findOne({ path: '...' }).useCache().then(dir => { })
-	return Q(fs.dir || Dir.find().findOne({ path: nodePath.dirname(fs.path) }).useCache()
-	.then(dir => dir ? _.assign(fs, { dir: dir._id, partition: dir.partition?dir.partition._id:undefined }) :
+	return Q(doc.dir || Dir.find().findOne({ path: nodePath.dirname(doc.path) }).useCache()
+	.then(dir => dir ? _.assign(doc, { dir: dir._id, partition: dir.partition?dir.partition._id:undefined }) :
 		Partition.find({}).useCache().then(partitions => _.find( _.reverse( _.sortBy( 
 			_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
 			partition => partition.mountpoint.length)),
-			partition => fs.path.startsWith(partition.mountpoint)))
-		.then(partition => _.assign(fs, { partition: partition._id }))))
+			partition => doc.path.startsWith(partition.mountpoint)))
+		.then(partition => _.assign(doc, { partition: partition._id }))))
 
-	.tap(() => console.verbose(`[model ${model.modelName}].post('doCreate'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh}) fs.isNew=${fs.isNew} fs.isModified()=${fs.isModified()} fs.fileType='${fs.fileType}' fs=${inspect(fs)}`))
-	// .catch(err => {
-	// 	model._stats.errors.push(err);
-	// 	console.warn(`[model ${model.modelName}].post('doCreate'): error: ${err.stack||err}`);
-	// 	throw err;
-	// })
+	.tap(() => console.verbose(`[model ${model.modelName}].post('construct'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh})\ndisks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)}`))
 	.finally(() => { doCreateLevel--; });
 });
 

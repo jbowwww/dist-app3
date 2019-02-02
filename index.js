@@ -88,6 +88,7 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 	fsIterate(search).promisePipe(promisePipeOptions,
 		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
 		fse => FsEntry.findOrCreate(fse),
+		fse => { console.log(`fse.path: '${fse.path}'`); return fse; },
 		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
 		 ) )))
 

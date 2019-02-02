@@ -84,51 +84,20 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	});
 
-	// custom validation waits until creation tasks are completed before returning (and allowing save, bulkSave)
-	// schema.post('init', function(doc, next) {
-	// 	var doc = this;
-	// 	var model = doc.constructor;// && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
-	// 	Object.defineProperty(doc, '_init', { writeable: true, value: Q.defer(); });
-
-	// });
-
-	// schema.pre('validate', function(doc, next) {
-
-	// });
-
 	schema.plugin(statPlugin, { data: { upsert: {} } });
 
 	schema.pre('upsert', function(doc, next) {
-		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
-		// var doc = this;
-		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
-		// if (!doc && arguments[0] instanceof mongoose.Document) {
-		// 	doc = arguments[0];
-		// }
-			// if (discriminatorKey && doc && doc[discriminatorKey] && model.discriminators[doc[discriminatorKey]]) {
-			// 	model = model.discriminators[doc[discriminatorKey]];
-			// }
+		var model = this;
 		var eventName = 'pre.upsert';
 		model.emit(eventName, doc);
-		// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-		// var actionType = doc instanceof mongoose.Document ? doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' : 'static';
 		model._stats.upsert.calls++;
 		next();
 	});
 
 	schema.post('upsert', function(res, next) {
-		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
-		// var doc = this;
-		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
-		// if (!doc && arguments[0] instanceof mongoose.Document) {
-		// 	doc = arguments[0];
-		// }
-			// if (discriminatorKey && doc[discriminatorKey] && model.discriminators[doc[discriminatorKey]]) {
-			// 	model = model.discriminators[doc[discriminatorKey]];
-			// }
+		var model = this;
 		var eventName = 'post.upsert';
 		model.emit(eventName, res);
-		// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 		var actionType = res.upserted && res.upserted.length > 0 ? 'create' : res.nModified > 0 ? 'update' : 'check';
 		model._stats.upsert[actionType]++;
 		console.debug(`[model ${model.modelName}].post('upsert'): res=${inspect(res)} model._stats.upsert=${inspect(model._stats.upsert)}`);	// doc=${inspect(doc)} doc._actions=${inspect(doc._actions)}
@@ -136,23 +105,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 
 	schema.post('upsert', function(err, res, next) {
-		// console.log(`pre upsert: args=${inspect(_.slice(arguments))}`);
-		// var doc = this;
-		var model = this;//doc.constructor && doc.constructor.modelName /*doc instanceof mongoose.Document*/ ? doc.constructor : this;
-		// if (!doc && arguments[0] instanceof mongoose.Document) {
-		// 	doc = arguments[0];
-		// }
-			// if (discriminatorKey && doc[discriminatorKey] && model.discriminators[doc[discriminatorKey]]) {
-			// 	model = model.discriminators[doc[discriminatorKey]];
-			// }
+		var model = this;
 		var eventName = 'err.upsert';
 		model.emit(eventName, res, err);
-		// doc.emit(eventName, err);			// i wonder what this gets bound as? in any case shuld be the doc
 		model._stats.upsert.errors.push(err);
 		console.error(`[model ${model.modelName}].post('upsert') ERROR: res=${inspect(res)} model._stats.upsert=${inspect(model._stats.upsert)}: error: ${err.stack||err}`);
-		if (typeof next === 'function') {
-			return next(err);
-		}
+		return next(err);
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
@@ -230,31 +188,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		console.verbose(`[model ${model.modelName}(dk=${discriminatorKey})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[discriminatorKey]}': setting model='${/*inspect*/(model.modelName)}'`);
 
 		return Q(model.findOne(options.query))									// var q = model.findOneAndUpdate(query, data, { upsert: true });
-		.then(r => r ? r.updateDocument(data) : /*model.create*/ /*model.construct*/ new (model) (data))			// .then(doc => _.set(doc, '_actions', {}))
+		.then(r => r ? r.updateDocument(data) : /*model.create*/ model.construct /*new (model)*/ (data))			// .then(doc => _.set(doc, '_actions', {}))
 		.then(doc => options.saveImmediate ? doc.save() : doc);	
 
 	});
-
-/*	function parseArgs(...args) {
-
-		for (var arg of args) {
-			if (typeof arg === 'object') {
-				if (!doc) {
-					doc = arg;
-				} else if (!options) {
-					options = arg;
-				} else {
-					throw new ArgumentError(`Too many object arguments for uspert: 3 at most: args=${inspect(args)}`);
-				}
-			} else if (typeof arg === 'function') {
-				if (!cb) {
-					cb = arg;
-				} else {
-					throw new ArgumentError(`Too many function arguments for uspert: 1 at most: args=${inspect(args)}`);
-				}
-			}
-		}
-	}*/
 
 	// What is the difference between these methods and findOrCreate?? I think there was something but it may
 	// be so subtle and minor that it is not worth having both
@@ -335,24 +272,23 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	});
 
-schema.query.useCache = function useCache() {
+	schema.query.useCache = function useCache() {
 
-	var q = this.getQuery();
-	var jq = JSON.stringify(q);
-	var r = schema._cache.get(jq);
-	if (!r) {
-		console.verbose(`useCache: new q '${inspect(q, { compact: true })}'`);
-		return this.exec().then(r => {
-			schema._cache.set(jq, r);
+		var q = this.getQuery();
+		var jq = JSON.stringify(q);
+		var r = schema._cache.get(jq);
+		if (!r) {
+			console.verbose(`useCache: new q '${inspect(q, { compact: true })}'`);
+			return this.exec().then(r => {
+				schema._cache.set(jq, r);
+				return Q(r);
+			});
+		} else {
+			console.verbose(`useCache: found '${inspect(q, { compact: true })}'`);
 			return Q(r);
-		});
-	} else {
-		console.verbose(`useCache: found '${inspect(q, { compact: true })}'`);
-		return Q(r);
-	}
-};
-
-schema._cache = new Map();
+		}
+	};
+	schema._cache = new Map();
 
 	schema.query.promisePipe = function promisePipe(...promiseFuncs) {
 		return streamPromise(writeablePromiseStream(...promiseFuncs), { resolveEvent: 'finish' });
