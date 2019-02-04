@@ -56,16 +56,14 @@ var promisePipeOptions = {
 	}
 }
 
-var pipelines = {
-	debug: tap(a => {/* a = a.file; if (!a)*/ return; console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a/*.toObject({ getters: true })*/)}\n\n!!\n`); }),
-	bulkSave: a => a.bulkSave(),
-	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
-	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
-		iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
-		iff( a => !a.audio.isCheckedSince(a.file._ts.updatedAt), a => a.audio.loadMetadata(a.file) ) )
-};
-
-mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
+// var pipelines = {
+// 	debug: tap(a => {/* a = a.file; if (!a)*/ return; console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a/*.toObject({ getters: true })*/)}\n\n!!\n`); }),
+// 	bulkSave: a => a.bulkSave(),
+// 	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
+// 	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
+// 		iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
+// 		iff( a => !a.audio.isCheckedSince(a.file._ts.updatedAt), a => a.audio.loadMetadata(a.file) ) )
+// };
 
 // New idea - use Artefact to define promise pipes, something like:
 // Artefact.pipeFrom(fsIterate(search), )
@@ -80,17 +78,24 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 // and combine that with (optionally?) specifying extra types to include in the artefact
 // (artefact still needs an initial mongo doc (newly created or retrieved) to go and find other types associated with the artefact)
 // (how to map dependencies/ordering of type construction in artefacts? e.g. file -> audio -> sample)
- 
-.then(() => Disk.findOrPopulate()
-.catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
 
-.then(() => Q.all( _.map( searches, search =>
-	fsIterate(search).promisePipe(promisePipeOptions,
-		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
-		fse => FsEntry.findOrCreate(fse),
-		fse => { console.log(`fse.path: '${fse.path}'`); return fse; },
-		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
-		 ) )))
+mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
+ 
+.then(() => {
+	return Q(FsEntry.find({})/*.exec()*//*.cursor()*/).then(entries => {
+		console.log(`entries: ${inspect(entries)}`);
+	})
+})
+// .then(() => Disk.findOrPopulate()
+// .catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
+
+// .then(() => Q.all( _.map( searches, search =>
+// 	fsIterate(search).promisePipe(promisePipeOptions,
+// 		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
+// 		fse => FsEntry.findOrCreate(fse),
+// 		fse => { console.log(`fse.path: '${fse.path}'`); return fse; },
+// 		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
+// 		 ) )))
 
 // .then(async function() {
 // 	for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
