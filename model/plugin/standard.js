@@ -293,4 +293,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.query.promisePipe = function promisePipe(...promiseFuncs) {
 		return streamPromise(writeablePromiseStream(...promiseFuncs), { resolveEvent: 'finish' });
 	};
+
+	schema.query.iter = async function* iter() {
+		const cursor = this./*getQuery().exec().*/cursor();
+		for await (let doc of cursor) {//await cursor.next(); doc != null; doc = await cursor.next()) {
+			// console.log(`iter: doc=${inspect(doc)}iter.done=${inspect(doc.done)}`);// cursor=${inspect(cursor)}`);
+			yield doc;
+		}
+	};
 };

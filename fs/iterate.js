@@ -18,8 +18,8 @@ module.exports = {
 
 	createFsItem, iterate };
 
-	function createFsItem(path) {
-		return nodeFs.lstat(path).then(stats => ({
+	function createFsItem(path, stats) {
+		return ({
 			path: /*nodePath.resolve*/(path),
 			stats,
 			get fileType() { return stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'; },
@@ -32,7 +32,7 @@ module.exports = {
 			[util.inspect.custom](depth, options) {
 				return _.assign({}, this);
 			}
-		}));
+		})	;
 	};
 	
 	function iterate(options) {
@@ -55,7 +55,8 @@ module.exports = {
 		var self = _.extend({
 			
 			root: path,
-			rootDepth: path.split(nodePath.sep).length - 1,
+			// rootDepth: path.split(nodePath.sep).length - 1,
+			rootItem: null,
 			paths: [path],
 			errors: []
 		
@@ -66,6 +67,7 @@ module.exports = {
 			read: function (size) {
 
 				return (function next() {
+
 					if (!self.paths.length) {
 						if (self.errors.length) {
 							console.warn(`iterate('${self.root}'): stream end: ${self.errors.length} errors: ${self.errors.join('\n\t')}`);
@@ -75,11 +77,17 @@ module.exports = {
 						self.push(null);
 						return 0;
 					}
+					var path = self.paths[options.queueMethod]();
 					
-					createFsItem(self.paths[options.queueMethod]()).then(item => {
+					nodeFs.lstat(path)
+					.then(stats => createFsItem(path, stats))
+					.then(item => {
+						if (path === self.root) {
+							self.rootItem = item;
+						}
 						if (!options.filter || options.filter(item)) {
-							var currentDepth = item.pathDepth; - self.rootDepth;	// +1 because below here next files are read from this dir
-							if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootDepth))/* && (!options.filter || options.filter(item))*/) {
+							var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
+							if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
 								nodeFs.readdir(item.path).then(names => {
 									// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 									console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
@@ -90,7 +98,8 @@ module.exports = {
 								/*return*/ self.push(item);
 							}
 						}
-					}).catch(err => nextHandleError(err));
+					})
+					.catch(err => nextHandleError(err));
 
 					function nextHandleError(err) {
 						options.handleError(err);
@@ -103,16 +112,12 @@ module.exports = {
 
 				})();
 			}
-		}), {
-			promisePipe(...args) {
-				return promisePipe(self, ...args);
-			}
-		})
+		}))
 
-		.on('close', (...args) => console.verbose(`iterate: close: ${inspect(args)}`))
-		.on('end', (...args) => console.verbose(`iterate: end: ${inspect(args)}`))
-		.on('error', (err, ...args) => console.warn(`iterate: err: ${err} ${inspect(args)}`))
-		
-		return self;
+			.on('close', (...args) => console.verbose(`iterate: close: ${inspect(args)}`))
+			.on('end', (...args) => console.verbose(`iterate: end: ${inspect(args)}`))
+			.on('error', (err, ...args) => console.warn(`iterate: err: ${err} ${inspect(args)}`));
+
+		return streamPromise(self);
 	}
 // };

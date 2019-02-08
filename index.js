@@ -23,85 +23,65 @@ mongoose.Promise = Q;
 	const Audio = require('./model/audio.js');
 	const Artefact = require('./Artefact.js');
 
-var errors = [];
-process.on('uncaughtException', (err) => {
-  fs.writeSync(1, `process.on('uncaughtException'): ${err.stack||err}\n`);
-  errors.push(err);
-});
-process.on('beforeExit', () => {
-	if (errors && errors.length > 0) {
-		fs.appendFileSync('errors.txt', errors.join('\n'));
-	}
-});
-
 var searches = [
 	// { path: '/mnt/Stor', maxDepth: 0 },
 	// { path: '/mnt/Storage', maxDepth: 0 },
 	// { path: '/media/jk/Backup/RECOVERED_FILES/mystuff/Backup', maxDepth: 0 },
 	// { path: '/media/jk/My Passport', maxDepth: 0 },
-	{ path: '/mnt/media', maxDepth: 0 }
+	{ path: '/mnt/media', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
-var promisePipeOptions = {
-	catchErrors: function(err) { 
-		var d = err.promisePipeData;
-		var m = d.constructor;
-		if (m && m._stats) {
-			m._stats.errors.push(err);
-		} else {
-			errors.push(err);
-		}
-		console.warn(`fsIterate promisePipe error for ${d.fileType} '${d.path}':\n${err.stack||err}`);
+const app = require('./app.js');
+var promisePipeOptions = { catchErrors: app.onError };
+/* var pipelines = require('./pipelines.js');
+ * var pipelines = {
+ * 	debug: tap(a => { console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a)}\n\n!!\n`); }),
+ * 	bulkSave: a => a.bulkSave(),
+ * 	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
+ * 	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
+ * 		iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
+ * 		iff( a => !a.audio.isCheckedSince(a.file._ts.updatedAt), a => a.audio.loadMetadata(a.file) ) )
+ * };
+ */
+/* New idea - use Artefact to define promise pipes, something like:
+ * Artefact.pipeFrom(fsIterate(search), )
+ * or maybe
+ *
+ * fsIterate.pipe(FsEntry.artefactPipe({
+ *	 [pipeline ops...]
+ * ))
+ *
+ * ..yeah fuck i dunno haha
+ * but see if you can clean up this syntax a bit by putting it into Artefact
+ * and combine that with (optionally?) specifying extra types to include in the artefact
+ * (artefact still needs an initial mongo doc (newly created or retrieved) to go and find other types associated with the artefact)
+ * (how to map dependencies/ordering of type construction in artefacts? e.g. file -> audio -> sample)
+ */
+
+app.dbConnect()
+
+.then(() => Disk.findOrPopulate())
+.then(() => Q.all( _.map( searches, search =>
+	fsIterate(search).promisePipe(promisePipeOptions,
+		fse => FsEntry.findOrCreate(fse),		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
+		fse => { console.log(`fse.path: '${fse.path}'`); return fse; },
+		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
+	) )))
+
+.then(async function() {
+	for await (let f of /*await*/ File.find({ hash: { $exists: false } }).iter()) {//cursor()) {
+		// await pipelines.doHash(f);
+		 console.log(`f=${inspect(f)}`);
+		await Q.delay(88);
+		// await pipelines.bulkSave(f);
 	}
-}
-
-// var pipelines = {
-// 	debug: tap(a => {/* a = a.file; if (!a)*/ return; console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a/*.toObject({ getters: true })*/)}\n\n!!\n`); }),
-// 	bulkSave: a => a.bulkSave(),
-// 	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
-// 	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
-// 		iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
-// 		iff( a => !a.audio.isCheckedSince(a.file._ts.updatedAt), a => a.audio.loadMetadata(a.file) ) )
-// };
-
-// New idea - use Artefact to define promise pipes, something like:
-// Artefact.pipeFrom(fsIterate(search), )
-// or maybe
-//
-// fsIterate.pipe(FsEntry.artefactPipe({
-//	 [pipeline ops...]
-// ))
-//
-// ..yeah fuck i dunno haha
-// but see if you can clean up this syntax a bit by putting it into Artefact
-// and combine that with (optionally?) specifying extra types to include in the artefact
-// (artefact still needs an initial mongo doc (newly created or retrieved) to go and find other types associated with the artefact)
-// (how to map dependencies/ordering of type construction in artefacts? e.g. file -> audio -> sample)
-
-mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: true })
- 
-.then(() => {
-	return Q(FsEntry.find({})/*.exec()*//*.cursor()*/).then(entries => {
-		console.log(`entries: ${inspect(entries)}`);
-	})
 })
-// .then(() => Disk.findOrPopulate()
-// .catch(err => console.warn(`Disk.findOrPopulate: ${err.stack||err}`)))
 
-// .then(() => Q.all( _.map( searches, search =>
-// 	fsIterate(search).promisePipe(promisePipeOptions,
-// 		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
-// 		fse => FsEntry.findOrCreate(fse),
-// 		fse => { console.log(`fse.path: '${fse.path}'`); return fse; },
-// 		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
-// 		 ) )))
-
-// .then(async function() {
-// 	for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
-// 		await pipelines.doHash(f);
-// 		await pipelines.bulkSave(f);
-// 	}
+// .then(() => {
+// 	return Q(FsEntry.find({})/*.exec()*//*.cursor()*/).then(entries => {
+// 		console.log(`entries: ${inspect(entries)}`);
+// 	})
 // })
 
 // .then(async function() {
@@ -111,15 +91,15 @@ mongoose.connect("mongodb://localhost:27017/ArtefactsJS", { useNewUrlParser: tru
 // 	}
 // })
 
+// .then(() => { console.verbose(
+// 	`mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
+// 	`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
+// 	(errors.length > 0 ? `global errors (${errors.length}): ${inspect(errors)}\n` : '') ); })
+
+// .then(() => mongoose.connection.close()
+// 	.then(() => { console.log(`mongoose.connection closed`); })
+// 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
+
 .catch(err => console.error(`Other error: ${err.stack||err}`))
-
-.then(() => { console.verbose(
-	`mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
-	`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
-	(errors.length > 0 ? `global errors (${errors.length}): ${inspect(errors)}\n` : '') ); })
-
-.then(() => mongoose.connection.close()
-	.then(() => { console.log(`mongoose.connection closed`); })
-	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
-
+.then(() => app.quit())
 .done();

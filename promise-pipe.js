@@ -61,8 +61,20 @@ var self = {
 		 * 	- Particularly with respect to buffering/stream flow control. As is, the aggregated promisePipe could potentially cause the source stream to pause
 		 * 	  and/or the stream data to get buffered, as it will not call the callback for stream.Writeable.write until the promiseChain is fulfilled
 		 * I think this is all ok, just give it a good proper think through and run experiemnts/tests if necessary */
-		var writeable = self.writeablePromiseStream(options, ...promiseFunctions);
+
+		// sourceStream.on('progress', progress => { sourceStream._progress = progress; });//writeable.emit('progress', progress); });
+
+		// var pairedFunctions = _.concat(_.map(promiseFunctions, fn => [ fn, data => { fn.promisePipeData = data])
+		// var prefixFunction = data => {
+
+		// };
+		var writeable = self.writeablePromiseStream(options, /*_.concat(prefixFunction, */promiseFunctions/*)*/);
+
 		var thenable = self.streamPromise(pipeline(sourceStream, writeable), { resolveEvent: 'finish' });
+		// sourceStream.on('error', err => { process.nextTick(() => { writeable.emit('error', err); writeable.end(); }); });
+		// sourceStream.on('end', () => { writeable.end(); });
+		// sourceStream.on('data', data => writeable.
+		
 		// _.set(writeable, 'promisePipe', function promisePipe(...args) {
 		// 	console.debug(`writeable.promisePipe(): this=${inspect(this)} writeable=${inspect(writeable)} thenable=${inspect(thenable)}`);
 		// 	writeable.options.dataThru = true;
@@ -196,7 +208,13 @@ var self = {
 
 	streamPromise(stream, options = {}) {
 		options = _.defaults(options, { resolveEvent: 'finish',/* 'end',*/ rejectEvent: undefined/*'error'*/ });
-		return pEvent(stream, options.resolveEvent, !options.rejectEvent ? {} : { rejectionEvents: [ options.rejectEvent ] });
+		return _.extend(
+			pEvent(stream, options.resolveEvent, !options.rejectEvent ? {} : { rejectionEvents: [ options.rejectEvent ] }),
+			{
+				promisePipe(...args) {
+					return self.promisePipe(stream, ...args);
+				}
+			});
 	}
 
 };
