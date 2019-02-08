@@ -3,10 +3,8 @@ const console = require('../../stdio.js').Get('model/plugin/standard', { minLeve
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
-Q.longStackSupport = true;
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('../../promise-pipe.js');
 const mongoose = require('mongoose');
-const Artefact = require('../../Artefact.js');
 const statPlugin = require('./stat.js');
 
 // TODO: Work out separation of concerns with model._stats and all your separate plugins e.g. bulksave (stat plugin is more of a plugin plugin)
@@ -16,8 +14,7 @@ const statPlugin = require('./stat.js');
 module.exports = function standardSchemaPlugin(schema, options) {
 
 	var discriminatorKey = schema.get('discriminatorKey');
-	
-	console.debug(`standardSchemaPlugin(): schema=${inspect(schema)}, schema.prototype=${inspect(schema.prototype)}, options=${inspect(options)}, this=${inspect(this)}`);
+	console.verbose(`standardSchemaPlugin(): schema.obj='${inspect(schema.obj)}', options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 	
 	schema.static('construct', function construct(data, cb) {
 		return Q(new (this)(data));

@@ -21,7 +21,6 @@ mongoose.Promise = Q;
 	const File = require('./model/filesys/file.js');
 	const Dir = require('./model/filesys/dir.js');// } = FileSys;
 	const Audio = require('./model/audio.js');
-	const Artefact = require('./Artefact.js');
 
 var searches = [
 	// { path: '/mnt/Stor', maxDepth: 0 },

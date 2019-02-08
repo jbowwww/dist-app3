@@ -3,7 +3,7 @@
 const console = require('./stdio.js').Get('app', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
-const Q = require('q');
+const Q = require('q'); Q.longStackSupport = true;
 // const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('./promise-pipe.js');
 const fs = require('fs');
 const mongoose = require('mongoose');

@@ -6,43 +6,47 @@ const _ = require('lodash');
 
 module.exports = function statSchemaPlugin(schema, options) {
 
-// TODO = custom inspect func that omits values of 0 and objects containing only 0's
-	console.debug(`statSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+	options = _.merge({ /*data: {*/ validate: {}, save: {}, bulkSave: {} /*}*/ }, options);
+	console.verbose(`standardSchemaPlugin(): schema.name='${schema.name}', options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 
-	options = _.merge({ data: { validate: {}, save: {}, bulkSave: {} } }, options);
 	if (schema._stats === undefined) {
 		Object.defineProperty(schema, '_stats', { enumerable: true, writeable: true, configurable: true, value: { } });
 	}
-	_.assign(schema._stats, options.data);
-	schema.on('init', model => {
-		if (schema._stats !== undefined) {
-			Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value:
-				_.create({
-					[util.inspect.custom]: function() { 
-						return _.pickBy(this, (v, k) => v.calls > 0 || v.success > 0 || v.failed > 0 || v.create > 0 || v.update > 0 || v.check > 0 || v.static > 0);
-					}
-				}, _.mapValues(schema._stats, (value, key) => _.create({
-					[util.inspect.custom]: function() {
-						return	this.calls === 0 && this.success === 0 && this.failed === 0 &&
-								this.create === 0 && this.update === 0 && this.check === 0 && this.static === 0 ? ''
-						 : 	`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total},`
-						 + 	` create: ${this.create}, update: ${this.update}, check: ${this.check}`	// , static: ${this.static}
-						 + 	(this.errors.length === 0 ? '' : `, errors: [\n\t` + this.errors.join('\n\t') + ' ]') + ' }';
-					},
-					calls: 0,												// how many raw calls to the stat thing being counted, before succeeded or failed 
-					success: 0,												// how many calls to this stat succeeded 
-					get failed() { return this.errors.length; },			// how many failed (counts errors)	
-					get total() { return this.success + this.failed; },		// success + total (should be equal to calls, but this is another assumption/expectation to be tested)
-					create: 0,
-					update: 0,
-					check: 0,
-					static: 0,
-					errors: []
-				}, value)))
-			});
+	_.assign(schema._stats, options/*.data*/);
 
-		}
+	schema.on('init', model => {
+
+		// if (schema._stats !== undefined) {
+		
+		Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value: _.create({
+		
+			[util.inspect.custom]: function() { return _.pickBy(this, (v, k) => v.calls > 0 || v.success > 0 || v.failed > 0 || v.create > 0 || v.update > 0 || v.check > 0 || v.static > 0); }
+		
+		}, _.mapValues(schema._stats, (value, key) => _.create({
+		
+			[util.inspect.custom]: function() {
+				return	this.calls === 0 && this.success === 0 && this.failed === 0 &&
+						this.create === 0 && this.update === 0 && this.check === 0 && this.static === 0 ? ''
+				 : 	`{ calls: ${this.calls}, success: ${this.success}, failed: ${this.failed}, total: ${this.total},`
+				 + 	` create: ${this.create}, update: ${this.update}, check: ${this.check}`	// , static: ${this.static}
+				 + 	(this.errors.length === 0 ? '' : `, errors: [\n\t` + this.errors.join('\n\t') + ' ]') + ' }';
+			},
+	
+			calls: 0,												// how many raw calls to the stat thing being counted, before succeeded or failed 
+			success: 0,												// how many calls to this stat succeeded 
+			get failed() { return this.errors.length; },			// how many failed (counts errors)	
+			get total() { return this.success + this.failed; },		// success + total (should be equal to calls, but this is another assumption/expectation to be tested)
+			create: 0,
+			update: 0,
+			check: 0,
+			static: 0,
+			errors: []
+
+		}, value )) )});
+	
+		// }
 		console.debug(`schema.on('init'): modelName='${model.modelName}' model._stats=${util.inspect(model._stats)}`);
+	
 	});
 
 };

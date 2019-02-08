@@ -1,6 +1,6 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/devices', { minLevel: 'verbose' });	// debug verbose log
+const console = require('../stdio.js').Get('fs/devices', { minLevel: 'log' });	// debug verbose log
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
 const util = require('util');
 const _ = require('lodash');

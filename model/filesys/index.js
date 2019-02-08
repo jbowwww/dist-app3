@@ -10,11 +10,11 @@ const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: fal
 
 const mongoose = require('mongoose');
 
-const FsEntry = require('./filesys-entry.js');
 const Disk = require('./disk.js');
+const Partition = require('./partition.js');
+const FsEntry = require('./filesys-entry.js');
 const Dir = require('./dir.js');
 const File = require('./file.js');
-const Partition = require('./partition.js');
 
 // const Artefact = require('../../Artefact.js');
 
