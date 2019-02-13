@@ -6,6 +6,7 @@
 "use strict";
 const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
+const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
 const hashFile = require('./fs/hash.js');
@@ -17,6 +18,7 @@ const PromisePipe = require('./promise-pipe.js');
 const pEvent = require('p-event');
 const pMap = require('p-map');
 const stream = require('stream');
+stream.finished = util.promisify(stream.finished);
 const through2Concurrent = require('through2-concurrent');
 
 	// const FileSys = require('./model/filesys');
@@ -66,12 +68,12 @@ var promisePipeOptions = { catchErrors: app.onError };
 app.dbConnect()
 .then(() => Disk.findOrPopulate())
 .then(() => Q.all( _.map( searches, search => 
-	/*stream.finished*/(fsIterate(search).promisePipe(
-		/*PromisePipe*/({ concurrency: 4 },
-			async fse => FsEntry.findOrCreate,
+	stream.finished(fsIterate(search).pipe(
+		PromisePipe({ concurrency: 1 },
+			FsEntry.findOrCreate,
 			fse => console.log(`fse.path: '${fse.path}'`),
-			async fse => (fse.fileType === 'dir' ? await fse.save() : await fse.bulkSave())
-		) )) )))
+			fse => (fse.fileType === 'dir' ? fse.save() : fse.bulkSave())
+		).stream() )) )))
 
 	// for /*await */(var fse of fsIterate(search)) {
 	// 	await FsEntry.findOrCreate(fse);		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO

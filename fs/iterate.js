@@ -9,6 +9,7 @@ const nodeFs = promisifyMethods(require('fs'));
 const nodePath = require('path');
 const stream = new require('stream');
 stream.finished = util.promisify(stream.finished);
+var pipeline = util.promisify(stream.pipeline);
 const PromisePipe = require('../promise-pipe.js');
 const Q = require('q');
 Q.longStackSupport = true;
@@ -114,7 +115,7 @@ module.exports = {
 			rootItem: null,
 			paths: [path],
 			errors: [],
-			promisePipe(...args) { return stream.finished(stream.pipeline(self, new PromisePipe(...args).stream())); }
+			promisePipe(...args) { return /*stream.finished*/(pipeline(self, new PromisePipe(...args).stream())); }
 		
 		});
 

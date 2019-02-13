@@ -1,7 +1,7 @@
 
 "use strict";
 
-const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'log' });	// verbose debug log
+const console = require('./stdio.js').Get('bin/fs/promise-pipe', { minLevel: 'verbose' });	// verbose debug log
 const stream = require('stream');
 const pipeline = stream.pipeline;
 const _ = require('lodash');
@@ -65,7 +65,7 @@ PromisePipe.prototype = {
 		return this._pipeline;
 	},
 
-	async run(data) {
+	run(data) {
 		return this._run(data);
 	},
 	threadCount: undefined,
@@ -74,17 +74,47 @@ PromisePipe.prototype = {
 	stream(options = {}) {
 		options = _.defaults(options, this.options, PromisePipe.options);
 		var self = this;
+
+		console.verbose(`PromisePipe.stream: options=${inspect(options, { compact: true })} this=${inspect(this)} self=${inspect(self)}`);
 		return through2Concurrent.obj({ maxConcurrency: options.concurrency }, function (data, enc, callback) {
-			try {
+			// try {
+				console.verbose(`PromisePipe.stream: data=${inspect(data, { compact: true })} this=${inspect(this)} self=${inspect(self)} selfrun=${self.run}`);
+				// var newData = await 
 				self.run(data)
-				.then(newData => callback(null, newData))
-				.catch(err => process.nextTick(() => callback(new PromisePipeError(self, data, err))));
-			} catch (err) {
-				err = new PromisePipeError(self, data, err);
-				self.error = err;
-				callback(err);
-			}
-		});
+				.then(newData => {
+				console.verbose(`PromisePipe.stream: newData=${inspect(data, { compact: true })} this=${inspect(this)} self=${inspect(self)} selfrun=${self.run}`);
+				 // callback(null, newData);
+				})
+				.catch(err => {
+					console.error(err);
+					process.nextTick(() => 
+					callback(err)
+					);
+				});
+				// return newData;// .catch(err => {
+				// 	console.error(err);
+				// 	process.nextTick(() => callback(new PromisePipeError(self, data, err)));
+				// });
+			// } catch (err) {
+				// err = new PromisePipeError(self, data, err);
+				// self.error = err;
+				// console.error(err);
+				// process.nextTick(() => callback(err));
+			// }
+		})
+		.on('pipe', function (src) {
+			src
+			.on('error', err => console.error(`stream error: ${err.stack||err}`))	//process.nextTick(() => this.emit('error', err)))
+			.on('close', () => process.nextTick(() => this.emit('close')))
+			.on('finish', () => process.nextTick(() => this.emit('finish')))
+			.on('end', () => process.nextTick(() => this.emit('end')));
+			console.verbose(`PromisePipe().stream().on('pipe'): src=${inspect(src)}`);
+		})
+		.on('error', err => { console.error(`stream error: ${err.stack||err}`); })
+		.on('close', () => { console.verbose(`stream close`); })
+		.on('finish', () => { console.verbose(`stream finish`); })
+		.on('end', () => { console.verbose(`stream end`); })
+		
 	},
 
 	_build() {
@@ -97,11 +127,12 @@ PromisePipe.prototype = {
 			data: null
 		}));
 		var innerPipeline = _.map(this.stages, (stage, i) => async data => {
+			console.verbose(`innerPipeline.stage[${i}]: ${this.stages[i]}`);
 			stage.threadCount++;
 			stage.writeCount++;
 			stage.data = data;
 			try {
-				return await stage.stage(data);
+				return stage.stage(data);
 			} catch (err) {
 				err = new PromisePipeError(this, data, err);
 				stage.error = this.error = err;
@@ -110,12 +141,14 @@ PromisePipe.prototype = {
 				stage.threadCount--;
 			}
 		});
-		var innerRun = _.flow(innerPipeline);//_.reduce(innerPipeline, (innerPipeline, current) => innerPipeline.then(current), Q(data))
 		this._run = async data => {
 			this.threadCount++
 			this.writeCount++;
 			// try {
-				return innerRun.call(this, data);
+
+		var innerRun = _.reduce(innerPipeline, (innerPipeline, current) => innerPipeline.then(current), Q(data));//_.flow(innerPipeline);
+		console.verbose(`innerRun=${inspect(innerRun)}`);
+				return innerRun;//.call(this, data);
 			// } catch(err) {
 
 			// }			
@@ -147,5 +180,7 @@ PromisePipe.prototype = {
 	}
 
 };
+
+PromisePipe.prototype.constructor = PromisePipe;
 
 module.exports = PromisePipe;
