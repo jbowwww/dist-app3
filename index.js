@@ -68,12 +68,12 @@ var promisePipeOptions = { catchErrors: app.onError };
 app.dbConnect()
 .then(() => Disk.findOrPopulate())
 .then(() => Q.all( _.map( searches, search => 
-	stream.finished(fsIterate(search).pipe(
+	/*stream.finished*/pEvent(fsIterate(search).pipe(
 		PromisePipe({ concurrency: 1 },
-			FsEntry.findOrCreate,
-			fse => console.log(`fse.path: '${fse.path}'`),
-			fse => (fse.fileType === 'dir' ? fse.save() : fse.bulkSave())
-		).stream() )) )))
+			fse => FsEntry.findOrCreate(fse),
+			// fse => console.log(`fse.path: '${fse.path}'`),
+			// fse => (fse.fileType === 'dir' ? fse.save() : fse.bulkSave())
+		).stream() ), 'finish') )))
 
 	// for /*await */(var fse of fsIterate(search)) {
 	// 	await FsEntry.findOrCreate(fse);		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO

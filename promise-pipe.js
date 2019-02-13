@@ -105,9 +105,9 @@ PromisePipe.prototype = {
 		.on('pipe', function (src) {
 			src
 			.on('error', err => console.error(`stream error: ${err.stack||err}`))	//process.nextTick(() => this.emit('error', err)))
-			.on('close', () => process.nextTick(() => this.emit('close')))
+			// .on('close', () => process.nextTick(() => this.emit('close')))
 			.on('finish', () => process.nextTick(() => this.emit('finish')))
-			.on('end', () => process.nextTick(() => this.emit('end')));
+			// .on('end', () => process.nextTick(() => this.emit('end')));
 			console.verbose(`PromisePipe().stream().on('pipe'): src=${inspect(src)}`);
 		})
 		.on('error', err => { console.error(`stream error: ${err.stack||err}`); })
@@ -126,7 +126,7 @@ PromisePipe.prototype = {
 			writeCount: 0,
 			data: null
 		}));
-		var innerPipeline = _.map(this.stages, (stage, i) => async data => {
+		var innerPipeline = _.map(this.stages, (stage, i) => (/*async*/ data => {
 			console.verbose(`innerPipeline.stage[${i}]: ${this.stages[i]}`);
 			stage.threadCount++;
 			stage.writeCount++;
@@ -140,8 +140,8 @@ PromisePipe.prototype = {
 				stage.data = null;
 				stage.threadCount--;
 			}
-		});
-		this._run = async data => {
+		}));
+		this._run = /*async*/ data => {
 			this.threadCount++
 			this.writeCount++;
 			// try {
