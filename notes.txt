@@ -1,3 +1,70 @@
+190214
+
+	Debug func: output/return a parameter's:
+		type, prototype, value OR for object: JSON or optionally property descriptors, functions and optionally their source
+	
+	Options parsing func would be nice, usage e.g. something like:
+	var { options, pipeline } = args(arguments, [
+		{ type: Object, required: false, default: { concurrency: 1 } },
+		{ type: [Function, Array], required: true },
+	]);
+	take away 'required' field and infer by presence of 'default' (default can be undefined to indicate not required)
+	still allow usage of 'required' tho i guess 
+	type can also be a predicate function (how to distinguish from value 'FUnction'? probably compare with FUnction.prototype.constructor or something)
+
+190209
+
+Unit tests would be very useful, generally - quickly easily tell if anything has broken /what was broken
+
+Generic reusable class - Counter / StatsCounter
+	- Similar / based on current stats plugin implementation
+	- Basically an object with properties for stats/debug purposes
+	- Implements a util.inspect.custom method that by default only outputs non-zero/non-default values
+	- per-instance config can specify members that should always be included/excluded
+		- other stuff
+	- Probably need to supply a POJO with initial/default values for properties
+		- alternatively could try some proxy-based (or other approach?) implementation that automatically creates members that don't exist?
+			- so could just do statsObj.a.b.c++ regardless of whether it currently exists
+			- this probably a bad idea, define explicitly
+	- Uses prototypical inheritance style i.e. function constructor i.e. function Stats(...) {}
+		- can create instances using new Stats(...)
+		- can mix into current instance('this') or other object by doing Stats.call(this, ....) 
+	- constructor should probably define properties using Object.defineProperty instead of just this.prop=x, to allow
+	  mixin usage on objects that are somewhat frozen/readonly like mongoose Models seem to be 
+
+Distinct, nicely encapsulated PromisePipe class
+	- inherits from stream.Writeable or through2concurrent
+	- allows plain readable streams to .pipe() to them
+		- while still handling error/close/whatever events (a la stream.pipeline())
+			- uses stream.Writeable.on('pipe') event to get the stream.Readable src, and adds appropriate 
+			  error/close/finish/end/whatever handlers that pass the events to the PromisePipe stream.Writeable
+
+Or (and/or combine with above if appropriate) - Highland.js (highlandjs.org)
+OK considering re-write using highland, of some or all of following compoents -
+	- fs.iterate
+		- (using highland's generators - same concept but not the same as JS's generators)
+			// using a generator function
+			_(function (push, next) {
+			    push(null, 1);
+			    push(err);
+			    next();
+			});
+	- pipeline definitions and operations in index.js, index3.js
+		- using highland's _.pipeline()
+			function isBlogPost(doc) {
+			    return doc.type === 'blogpost';
+			}
+
+			var output = fs.createWriteStream('output');
+			var docs = new db.createReadStream();
+
+			// Wrap a node stream and pipe to file
+			_(docs).filter(isBlogpost).pipe(output);
+
+			// or, pipe in a node stream directly:
+			// useful if you need a TransformStream-like object for external APIs.
+			var transformStream = _.pipeline(_.filter(isBlogpost));
+			docs.pipe(transformStream).pipe(output);
 
 190127
 At this point, if you focus you should be close to having something that can be somewhat useful

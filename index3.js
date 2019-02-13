@@ -11,7 +11,6 @@ const Q = require('q');
 const hashFile = require('./fs/hash.js');
 const fs = require('fs');
 const fsIterate = require('./fs/iterate.js').iterate;
-const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('./promise-pipe.js');
 const mongoose = require('mongoose');	
 mongoose.Promise = Q;
 

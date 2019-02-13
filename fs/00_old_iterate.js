@@ -7,9 +7,6 @@ const util = require('util');
 const _ = require('lodash');
 const nodeFs = promisifyMethods(require('fs'));
 const nodePath = require('path');
-const stream = new require('stream');
-stream.finished = util.promisify(stream.finished);
-const PromisePipe = require('../promise-pipe.js');
 const Q = require('q');
 Q.longStackSupport = true;
 const getDevices = require('./devices.js');
@@ -51,11 +48,15 @@ module.exports = {
 				console.warn(`iterate: ${err}`);//${err.stack||err}`);
 			}
 		});
+		console.verbose(`iterate(${inspect(options, { compact: true })})`);
+
+		var root = nodePath.resolve(options.path);
+		//var rootDepth: path.split(nodePath.sep).length - 1,
+		var rootItem = null;
+		var paths = [path];
+		var errors = [];
 		
-		var path = nodePath.resolve(options.path);
-		console.verbose(`iterate('${path}', ${inspect(options, { compact: false })})`);
-	  	
-		var self = _.extend(stream.Readable({
+		var self = new require('stream').Readable({
 			
 			objectMode: true,
 
@@ -63,30 +64,30 @@ module.exports = {
 
 				return (function next() {
 
-					if (!self.paths.length) {
-						if (self.errors.length) {
-							console.warn(`iterate('${self.root}'): stream end: ${self.errors.length} errors: ${self.errors.join('\n\t')}`);
+					if (!run.paths.length) {
+						if (run.errors.length) {
+							console.warn(`iterate('${run.root}'): stream end: ${run.errors.length} errors: ${run.errors.join('\n\t')}`);
 						} else {
-							console.debug(`iterate('${self.root}'): stream end`);
+							console.debug(`iterate('${run.root}'): stream end`);
 						}
 						self.push(null);
 						return 0;
 					}
-					var path = self.paths[options.queueMethod]();
+					var path = run.paths[options.queueMethod]();
 					
 					nodeFs.lstat(path)
 					.then(stats => createFsItem(path, stats))
 					.then(item => {
-						if (path === self.root) {
-							self.rootItem = item;
+						if (path === run.root) {
+							run.rootItem = item;
 						}
 						if (!options.filter || options.filter(item)) {
-							var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
-							if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
+							var currentDepth = item.pathDepth; - run.rootItem.pathDepth/*run.rootDepth*/;	// +1 because below here next files are read from this dir
+							if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + run.rootItem.pathDepth/*run.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
 								nodeFs.readdir(item.path).then(names => {
 									// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
-									console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
-									_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
+									console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} run.paths=[${run.paths.length}] item=${inspect(item)}`);
+									_.forEach(names, name => run.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
 									/*return*/ self.push(item);
 								}).catch(err => nextHandleError(err));
 							} else {
@@ -98,25 +99,20 @@ module.exports = {
 
 					function nextHandleError(err) {
 						options.handleError(err);
-						self.errors.push(err);
+						run.errors.push(err);
 						// process.nextTick(() =>
-						 self.emit('error', err);
+						 // run.emit('error', err);
 						 // );
 						return next();//1;
 					}
 
 				})();
 			}
-		}), {
-			
-			root: path,
-			// rootDepth: path.split(nodePath.sep).length - 1,
-			rootItem: null,
-			paths: [path],
-			errors: [],
-			promisePipe(...args) { return stream.finished(stream.pipeline(self, new PromisePipe(...args).stream())); }
-		
-		});
+		})
+		.on('close', (...args) => console.verbose(`iterate: close: ${inspect(args)}`))
+		.on('end', (...args) => console.verbose(`iterate: end: ${inspect(args)}`))
+		.on('error', (err, ...args) => console.warn(`iterate: err: ${err} ${inspect(args)}`));
 
 		return self;
 	}
+// };

@@ -182,7 +182,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		} else if (_.isObject(options.query)) {
 			options.query = _.mapValues(schema.get('defaultFindQuery'), (v, k) => v === undefined ? data[k] : v);
 		}
-		console.verbose(`[model ${model.modelName}(dk=${discriminatorKey})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[discriminatorKey]}': setting model='${/*inspect*/(model.modelName)}'`);
+		console.debug(`[model ${model.modelName}(dk=${discriminatorKey})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[discriminatorKey]}': setting model='${/*inspect*/(model.modelName)}'`);
 
 		return Q(model.findOne(options.query))									// var q = model.findOneAndUpdate(query, data, { upsert: true });
 		.then(r => r ? r.updateDocument(data) : /*model.create*/ model.construct /*new (model)*/ (data))			// .then(doc => _.set(doc, '_actions', {}))
@@ -291,11 +291,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		return streamPromise(writeablePromiseStream(...promiseFuncs), { resolveEvent: 'finish' });
 	};
 
-	schema.query.iter = async function* iter() {
-		const cursor = this./*getQuery().exec().*/cursor();
-		for await (let doc of cursor) {//await cursor.next(); doc != null; doc = await cursor.next()) {
-			// console.log(`iter: doc=${inspect(doc)}iter.done=${inspect(doc.done)}`);// cursor=${inspect(cursor)}`);
-			yield doc;
-		}
-	};
+	// schema.query.iter = function iter() { return this.cursor(); };
+	// async function* iter() {
+	// 	const cursor = this./*getQuery().exec().*/cursor();
+	// 	for await (let doc of cursor) {//await cursor.next(); doc != null; doc = await cursor.next()) {
+	// 		// console.log(`iter: doc=${inspect(doc)}iter.done=${inspect(doc.done)}`);// cursor=${inspect(cursor)}`);
+	// 		yield doc;
+	// 	}
+	// };
 };

@@ -4,7 +4,6 @@ const console = require('./stdio.js').Get('app', { minLevel: 'verbose' });	// de
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q'); Q.longStackSupport = true;
-// const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('./promise-pipe.js');
 const fs = require('fs');
 const mongoose = require('mongoose');
 
@@ -56,14 +55,8 @@ var app = {
 		}
 	},
 	onError(err, msg = '') {
-		var m, d = err.promisePipeData;
-		if (d && (m = d.constructor) && m._stats) {
-			m._stats.errors.push(err);
-			console.warn(`${msg?msg+' ':''}promisePipe error for ${d.fileType||'(non-fsEntry)'} '${d.path||d._id||d}': ${err.stack||err}`);
-		} else {
-			app.errors.push(err);
-			console.warn(`${msg?msg+' ':''}error: ${err.stack||err}`);
-		}
+		app.errors.push(err);
+		console.warn(`${msg?msg+' ':''}error: ${err.stack||err}`);
 	},
 	onUncaughtException(err, msg = '') {
 		app.onError(err, msg);

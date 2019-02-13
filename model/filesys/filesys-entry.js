@@ -53,7 +53,7 @@ fsEntry.plugin(require('../plugin/artefact.js'));
 fsEntry.post('init', function() {
 	this.populate([{ path: 'dir', select: 'path _ts' }, { path: 'partition' }])
 	.execPopulate()
-	.tap(() => console.verbose(`[model ${this.constructor.modelName}].post('init').populated: this=${inspect(this)}`));
+	.tap(() => console.debug(`[model ${this.constructor.modelName}].post('init').populated: this=${inspect(this)}`));
 });
 
 // how to queue up a method for execution after a document / model instance is created 
@@ -86,7 +86,7 @@ fsEntry.post('construct', function doCreate(doc, next) {
 			partition => doc.path.startsWith(partition.mountpoint)))
 		.then(partition => _.assign(doc, { partition: partition._id }))))
 
-	.tap(() => console.verbose(`[model ${model.modelName}].post('construct'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh})\ndisks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)}`))
+	.tap(() => console.debug(`[model ${model.modelName}].post('construct'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh})\ndisks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)}`))
 	.finally(() => { doCreateLevel--; });
 });
 

@@ -11,9 +11,13 @@ const Q = require('q');
 const hashFile = require('./fs/hash.js');
 const fs = require('fs');
 const fsIterate = require('./fs/iterate.js').iterate;
-const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('./promise-pipe.js');
 const mongoose = require('mongoose');	
 mongoose.Promise = Q;
+const PromisePipe = require('./promise-pipe.js');
+const pEvent = require('p-event');
+const pMap = require('p-map');
+const stream = require('stream');
+const through2Concurrent = require('through2-concurrent');
 
 	// const FileSys = require('./model/filesys');
 	const Disk = require('./model/filesys/disk.js');
@@ -58,20 +62,27 @@ var promisePipeOptions = { catchErrors: app.onError };
  * (how to map dependencies/ordering of type construction in artefacts? e.g. file -> audio -> sample)
  */
 
-app.dbConnect()
 
+app.dbConnect()
 .then(() => Disk.findOrPopulate())
-.then(() => Q.all( _.map( searches, search =>
-	fsIterate(search).promisePipe(promisePipeOptions,
-		fse => FsEntry.findOrCreate(fse),		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
-		fse => { console.log(`fse.path: '${fse.path}'`); return fse; },
-		fse => fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
-	) )))
+.then(() => Q.all( _.map( searches, search => 
+	/*stream.finished*/(fsIterate(search).promisePipe(
+		/*PromisePipe*/({ concurrency: 4 },
+			async fse => FsEntry.findOrCreate,
+			fse => console.log(`fse.path: '${fse.path}'`),
+			async fse => (fse.fileType === 'dir' ? await fse.save() : await fse.bulkSave())
+		) )) )))
+
+	// for /*await */(var fse of fsIterate(search)) {
+	// 	await FsEntry.findOrCreate(fse);		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
+	// 	console.log(`fse.path: '${fse.path}'`);
+	// 	await fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
+	// }
 
 .then(async function() {
-	for await (let f of /*await*/ File.find({ hash: { $exists: false } }).iter()) {//cursor()) {
+	for await (let f of await File.find({ hash: { $exists: false } }).cursor()) {	//iter()) {
 		// await pipelines.doHash(f);
-		 console.log(`f=${inspect(f)}`);
+		 console.verbose(`f=${inspect(f)}`);
 		await Q.delay(88);
 		// await pipelines.bulkSave(f);
 	}
@@ -99,6 +110,6 @@ app.dbConnect()
 // 	.then(() => { console.log(`mongoose.connection closed`); })
 // 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.catch(err => console.error(`Other error: ${err.stack||err}`))
+.catch(err => console.error(`Other error: ${err.stack||inspect(err)}`))
 .then(() => app.quit())
 .done();

@@ -1,5 +1,5 @@
 
-const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('./promise-pipe.js');
+const promisePipe/*, tap, iff */  = require('./promise-pipe.js');
 const app = require('./app.js');
 
 module.exports = {
