@@ -33,7 +33,7 @@ var searches = [
 	// { path: '/mnt/Storage', maxDepth: 0 },
 	// { path: '/media/jk/Backup/RECOVERED_FILES/mystuff/Backup', maxDepth: 0 },
 	// { path: '/media/jk/My Passport', maxDepth: 0 },
-	{ path: '/mnt/media', maxDepth: 1 }
+	{ path: '/mnt/media', maxDepth: 2 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -67,28 +67,32 @@ var promisePipeOptions = { catchErrors: app.onError };
 
 app.dbConnect()
 .then(() => Disk.findOrPopulate())
-.then(() => Q.all( _.map( searches, search => 
-	/*stream.finished*/pEvent(fsIterate(search).pipe(
-		PromisePipe({ concurrency: 1 },
-			fse => FsEntry.findOrCreate(fse),
-			// fse => console.log(`fse.path: '${fse.path}'`),
-			// fse => (fse.fileType === 'dir' ? fse.save() : fse.bulkSave())
-		).stream() ), 'finish') )))
+.then(async () => Q.all( _.map( searches, async search => {
+	
+	// stream.finishedpEvent(fsIterate(search).pipe(
+		// PromisePipe({ concurrency: 1 },
 
+		for await (let f of fsIterate(search)) {
+			f = await FsEntry.findOrCreate(f);
+			console.log(`f.path: '${f.path}'`);
+			await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+		}
+		// ).stream() ), 'finish') )))
+})))
 	// for /*await */(var fse of fsIterate(search)) {
 	// 	await FsEntry.findOrCreate(fse);		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
 	// 	console.log(`fse.path: '${fse.path}'`);
 	// 	await fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
 	// }
 
-.then(async function() {
-	for await (let f of await File.find({ hash: { $exists: false } }).cursor()) {	//iter()) {
-		// await pipelines.doHash(f);
-		 console.verbose(`f=${inspect(f)}`);
-		await Q.delay(88);
-		// await pipelines.bulkSave(f);
-	}
-})
+// .then(async function() {
+// 	for await (let f of await File.find({ hash: { $exists: false } }).cursor()) {	//iter()) {
+// 		// await pipelines.doHash(f);
+// 		 console.verbose(`f=${inspect(f)}`);
+// 		await Q.delay(88);
+// 		// await pipelines.bulkSave(f);
+// 	}
+// })
 
 // .then(() => {
 // 	return Q(FsEntry.find({})/*.exec()*//*.cursor()*/).then(entries => {
