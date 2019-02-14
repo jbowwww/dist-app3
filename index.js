@@ -26,17 +26,23 @@ var searches = [
 ];
 
 
-await app.dbConnect();
+(async function main() {
 
-await Disk.findOrPopulate());
-await Q.all( _.map( searches, async search => {
-	for await (let f of fsIterate(search)) {
-		f = await FsEntry.findOrCreate(f);
-		console.log(`f.path: '${f.path}'`);
-		await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-	}
-})));
+	try {
 
+		await app.dbConnect();
+
+		console.log(`Populating disks/partitions...`);
+		await Disk.findOrPopulate();
+
+		// console.log(`Searching filesystems: ${inspect(searches, { compact: false })}`);
+		// await Q.all( _.map( searches, async search => {
+		// 	for await (let f of fsIterate(search)) {
+		// 		f = await FsEntry.findOrCreate(f);
+		// 		console.debug(`f.path: '${f.path}'`);
+		// 		await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+		// 	}
+		// }));
 // another possibility, that could allow for timing, debug/stats, etc
 // await app.run( Disk.findOrPopulate() );
 // await app.run( Q.all( _.map( searches, async search => {
@@ -46,14 +52,39 @@ await Q.all( _.map( searches, async search => {
 	// 	await fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
 	// }
 
-// .then(async function() {
-// 	for await (let f of await File.find({ hash: { $exists: false } }).cursor()) {	//iter()) {
-// 		// await pipelines.doHash(f);
-// 		 console.verbose(`f=${inspect(f)}`);
-// 		await Q.delay(88);
-// 		// await pipelines.bulkSave(f);
-// 	}
-// })
+		var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
+		var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
+		var totalFileCount = hashedFileCount + unhashedFileCount;
+		console.log(`Counted ${totalFileCount} files... ${hashedFileCount} hashed and ${unhashedFileCount} not`);
+	
+		var hashFileCount = 0;
+		console.log(`Hashing files...`);
+		var results = await File
+			.find({ hash: { $exists: false } })
+			.doHashes();
+		console.verbose(`results=${inspect(results)}`);
+			
+		for await (let f of results.cursor())
+		{
+			if (f.hash) {
+				hashCount++;
+				console.verbose(`f.path: '${f.path}' f.hash=${f.hash}`);
+			} else {
+				console.warn(`no hash for f.path='${f.path}'`);
+			}
+			// await Q.delay(88);
+			// await pipelines.bulkSave(f);
+		}
+
+		console.verbose(`: '${f.path}' f.hash=${f.hash}`);
+
+	} catch (err) {
+		console.error(`main() error: ${err.stack||err}`);
+	}
+
+	await app.quit();
+
+})();
 
 // .then(() => {
 // 	return Q(FsEntry.find({})/*.exec()*//*.cursor()*/).then(entries => {
@@ -77,6 +108,6 @@ await Q.all( _.map( searches, async search => {
 // 	.then(() => { console.log(`mongoose.connection closed`); })
 // 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
-.catch(err => console.error(`Other error: ${err.stack||inspect(err)}`))
-.then(() => app.quit())
-.done();
+// .catch(err => console.error(`Other error: ${err.stack||inspect(err)}`))
+// .then(() => app.quit())
+// .done();

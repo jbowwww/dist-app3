@@ -14,7 +14,7 @@ const PromisePipeError = require('./promise-pipe-error.js');
 PromisePipe.defaultOptions = {
 	concurrency: 1
 };
-PromisePipe.stream = PromisePipe_stream(/* ...args */) => new PromisePipe(arguments).stream();
+PromisePipe.stream = function PromisePipe_stream(/* ...args */) { new PromisePipe(arguments).stream(); }
 
 // standard args for promisePipe and related funcs. Returns { options, pipeline } where options is POJO and pipeline is array of functions or promisePipes
 function getArgs(args) {

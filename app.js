@@ -20,7 +20,7 @@ const mongoose = require('mongoose');
 var app = {
 
 	db: {},// { connection: undefined, url: undefined },
-	dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
+	async dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
 		console.verbose(`dbConnect: Opening db '${url}'...`);
 		try {
 			let connection = await mongoose.connect(url, { useNewUrlParser: true });
@@ -31,7 +31,7 @@ var app = {
 			console.error(`dbConnect: Error opening db '${url}': ${err.stack||err}`);
 		}
 	},
-	dbClose() {
+	async dbClose() {
 		console.verbose(`dbClose: Closing db '${app.db.url}' ...`);
 		try {
 			await mongoose.connection.close();
@@ -46,13 +46,13 @@ var app = {
 	// would like an easy way to name them without having to verbosely specify them in an object or array or such
 	// perhaps model/document/? methods could be wrapped so that the promises they return automatically getAllResponseHeaders
 	// properties set on them describing the method name, etc, 
-	run(fn) {
+	async run(fn) {
 		
 	},
 	
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
-			`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}`;
+			`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}`);
 		app.logErrors();
 	},
 	logErrors() {
@@ -86,10 +86,10 @@ var app = {
 			app.quit(1, 'Exiting due to SIGINT');
 		}
 	},
-	onBeforeExit() {
-		app.quit();
+	async onBeforeExit() {
+		await app.quit();
 	},
-	quit(exitCode = 0, exitMsg = 'Exiting') {
+	async quit(exitCode = 0, exitMsg = 'Exiting') {
 		if (typeof exitCode === 'string') {
 			exitMsg = exitCode;
 			exitCode = 0;

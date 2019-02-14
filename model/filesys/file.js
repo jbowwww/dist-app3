@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -14,7 +14,7 @@ let file = new mongoose.Schema({
 	hashUpdated: { type: Date, /*default: 0,*/ required: false }
 });
 
-file.plugin(require('../plugin/stat.js'), { data: { ensureCurrentHash: {} } });
+file.plugin(require('../plugin/stat.js'), { ensureCurrentHash: {} });
 
 
 // file.post('save', async function() {
@@ -39,12 +39,11 @@ file.virtual('extension').get(function extension() {
 	return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
 });
 
-file.query.hasHash = function() { return this.exists('hash'); };
-
 file.methods.doHash = function() {
 	var file = this;
 	var model = this.constructor;
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
+	console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
 	model._stats.ensureCurrentHash.calls++;
 	return hashFile(file.path).then((hash) => {
 		model._stats.ensureCurrentHash.success++;
@@ -62,6 +61,34 @@ file.methods.doHash = function() {
 		throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
 	});	
 };
+
+file.query.hasHash = function() { return this.exists('hash'); };
+
+file.query.doHashes = async function(rehashAll = false) {
+	var query = this;
+	var model = query.model;
+	var debugPrefix = `[${typeof model} ${model.modelName}]`;
+	var hashedCount = await query.count({ hash: { $exists: true } });
+	var unhashedCount = await query.count({ hash: { $exists: false } });
+	var count = hashedCount + unhashedCount; 
+	console.verbose(`${debugPrefix}.doHashes: query(${count} docs, ${hashedCount} hashed, ${unhashedCount} not)=${inspect(query, { comapct: false })}`);
+	var i = 0;
+	for await (let f of query.cursor()) {
+		console.debug(`${debugPrefix}.doHashes: [${typeof f} f]=${inspect(f, { compact: false })}`);
+		if (rehashAll || !f.hash) {
+	console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
+			await f.doHash();
+		}
+		if (f.hash) {
+			i++;
+		} else {
+			console.warn(`${debugPrefix}.doHashes: no hash for f.path='${f.path}'`);
+		}
+		f.bulkSave();
+	}
+	console.verbose(`${debugPrefix}.doHashes: calculated ${i} new hashes`);
+	return this;
+}
 
 /* 1612949298: TOOD: instead of storing raw aggregation operation pipeline arrays, if you could somehow hijack/override the Aggregate(?) returned by
  * model.aggregate, and set its prototype to a new object that contains functions of the same names as below, and inherits from the original
