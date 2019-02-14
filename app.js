@@ -22,31 +22,39 @@ var app = {
 	db: {},// { connection: undefined, url: undefined },
 	dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
 		console.verbose(`dbConnect: Opening db '${url}'...`);
-		return mongoose.connect(url, { useNewUrlParser: true })
-		.then(connection => {
+		try {
+			let connection = await mongoose.connect(url, { useNewUrlParser: true });
 			console.log(`dbConnect: opened db '${url}'`);
 			app.db = { connection, url };
-		})
-		.catch(err => { console.error(`dbConnect: Error opening db '${url}': ${err.stack||err}`); });
+			return connection;
+		} catch (err) {
+			console.error(`dbConnect: Error opening db '${url}': ${err.stack||err}`);
+		}
 	},
-	closeDb() {
-		console.verbose(`closeDb: Closing db '${app.db.url}' ...`);
-		return mongoose.connection.close()
-		.then(() => {
-			console.log(`closeDb: db closed '${app.db.url}'`);
+	dbClose() {
+		console.verbose(`dbClose: Closing db '${app.db.url}' ...`);
+		try {
+			await mongoose.connection.close();
+			console.log(`dbClose: db closed '${app.db.url}'`);
 			app.db = {};
-		})
-		.catch(err => { console.error(`closeDb: Error closing db '${app.db.url}': ${err.stack||err}`); });
+		} catch (err) {
+			console.error(`dbClose: Error closing db '${app.db.url}': ${err.stack||err}`);
+		}
 	},
+	
+	// Trying to conceive a neat way to track executing tasks(i.e. promises)
+	// would like an easy way to name them without having to verbosely specify them in an object or array or such
+	// perhaps model/document/? methods could be wrapped so that the promises they return automatically getAllResponseHeaders
+	// properties set on them describing the method name, etc, 
+	run(fn) {
+		
+	},
+	
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
-			`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
-			(app.errors.length > 0 ? `global errors (${app.errors.length}): ${inspect(app.errors)}\n` : '') );
+			`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}`;
 		app.logErrors();
 	},
-
-	errors: [],
-	_errorLastWritten: 0,
 	logErrors() {
 		if (app.errors && app.errors.length > 0 && app._errorLastWritten < app.errors.length) {
 			fs.appendFileSync('errors.txt', app.errors.join('\n'));
@@ -54,6 +62,9 @@ var app = {
 			app._errorLastWritten = app.errors.length;
 		}
 	},
+	
+	errors: [],
+	_errorLastWritten: 0,
 	onError(err, msg = '') {
 		app.errors.push(err);
 		console.warn(`${msg?msg+' ':''}error: ${err.stack||err}`);
@@ -62,7 +73,7 @@ var app = {
 		app.onError(err, msg);
 		app.quit(1, 'Exiting due to uncaught exception');
 	},
-
+	
 	onSigInt() {
 		app.logStats();
 		console.log('Press ctrl-c again to quit ...');
@@ -85,10 +96,9 @@ var app = {
 		}
 		exitMsg += `  (exitCode=${exitCode}) ...`;
 		app.logStats();
-		app.closeDb().then(() => {
-			console.log(exitMsg);
-			process.nextTick(() => process.exit(exitCode));
-		}).done();
+		await app.dbClose();
+		console.log(exitMsg);
+		process.nextTick(() => process.exit(exitCode));
 	}
 
 };

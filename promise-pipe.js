@@ -14,9 +14,7 @@ const PromisePipeError = require('./promise-pipe-error.js');
 PromisePipe.defaultOptions = {
 	concurrency: 1
 };
-PromisePipe.stream = function PromisePipe_stream(...args) {
-	return new PromisePipe(...args).stream();
-};
+PromisePipe.stream = PromisePipe_stream(/* ...args */) => new PromisePipe(arguments).stream();
 
 // standard args for promisePipe and related funcs. Returns { options, pipeline } where options is POJO and pipeline is array of functions or promisePipes
 function getArgs(args) {
@@ -54,6 +52,7 @@ function PromisePipe(...args) {
 }
 
 PromisePipe.prototype = {
+	
 	set pipeline(pipeline) {
 		if (!_.isArray(pipeline) || !_.every(pipeline, p => p instanceof PromisePipe || _.isArray(p) || typeof p === 'function')) {
 			throw new TypeError(`pipeline is not an array with elements of type function, array or PromisePipe, it is type ${typeof pipeline}: ${inspect(pipeline, { compact: true })}`);

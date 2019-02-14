@@ -1,7 +1,3 @@
-/* 180926 : dist-app3
- * Another re-write, where artefact types are each in their own table
- * This should hopefully avoid the difficulty and awkardness related to static member functions and data properties on embedded document schemas. 
- */
 
 "use strict";
 const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
@@ -15,11 +11,13 @@ const fsIterate = require('./fs/iterate.js').iterate;
 const mongoose = require('mongoose');	
 mongoose.Promise = Q;
 
+const app = require('./app.js');
+
 	// const FileSys = require('./model/filesys');
 	const Disk = require('./model/filesys/disk.js');
 	const FsEntry = require('./model/filesys/filesys-entry.js');
 	const File = require('./model/filesys/file.js');
-	const Dir = require('./model/filesys/dir.js');// } = FileSys;
+	const Dir = require('./model/filesys/dir.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
@@ -27,18 +25,21 @@ var searches = [
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
-const app = require('./app.js');
 
-app.dbConnect()
-.then(() => Disk.findOrPopulate())
-.then(() => Q.all( _.map( searches, async search => {
-		for await (let f of fsIterate(search)) {
-			f = await FsEntry.findOrCreate(f);
-			console.log(`f.path: '${f.path}'`);
-			await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-		}
-		// ).stream() ), 'finish') )))
-})))
+await app.dbConnect();
+
+await Disk.findOrPopulate());
+await Q.all( _.map( searches, async search => {
+	for await (let f of fsIterate(search)) {
+		f = await FsEntry.findOrCreate(f);
+		console.log(`f.path: '${f.path}'`);
+		await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+	}
+})));
+
+// another possibility, that could allow for timing, debug/stats, etc
+// await app.run( Disk.findOrPopulate() );
+// await app.run( Q.all( _.map( searches, async search => {
 	// for /*await */(var fse of fsIterate(search)) {
 	// 	await FsEntry.findOrCreate(fse);		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
 	// 	console.log(`fse.path: '${fse.path}'`);
