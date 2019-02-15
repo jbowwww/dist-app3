@@ -71,12 +71,13 @@ file.query.doHashes = async function(rehashAll = false) {
 	var hashedCount = await query.count({ hash: { $exists: true } });
 	var unhashedCount = await query.count({ hash: { $exists: false } });
 	var count = hashedCount + unhashedCount; 
-	console.verbose(`${debugPrefix}.doHashes: query(${count} docs, ${hashedCount} hashed, ${unhashedCount} not)=${inspect(query, { comapct: false })}`);
+	console.verbose(`${debugPrefix}.doHashes: query(${count} docs, ${hashedCount} hashed, ${unhashedCount} not)=${inspect(query, { comapct: false })} this=${inspect(this)}`);// this.map=${inspect(mongoose.Query.prototype.map)}`);
 	var i = 0;
-	for await (let f of query.cursor()) {
+	// for await (let f of query.cursor()) {
+	return this.map(async f => {
 		console.debug(`${debugPrefix}.doHashes: [${typeof f} f]=${inspect(f, { compact: false })}`);
 		if (rehashAll || !f.hash) {
-	console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
+			console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
 			await f.doHash();
 		}
 		if (f.hash) {
@@ -85,9 +86,9 @@ file.query.doHashes = async function(rehashAll = false) {
 			console.warn(`${debugPrefix}.doHashes: no hash for f.path='${f.path}'`);
 		}
 		f.bulkSave();
-	}
-	console.verbose(`${debugPrefix}.doHashes: calculated ${i} new hashes`);
-	return this;
+	});
+	// console.verbose(`${debugPrefix}.doHashes: calculated ${i} new hashes`);
+	// return this;
 }
 
 /* 1612949298: TOOD: instead of storing raw aggregation operation pipeline arrays, if you could somehow hijack/override the Aggregate(?) returned by

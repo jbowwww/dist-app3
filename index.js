@@ -25,11 +25,8 @@ var searches = [
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
-
 (async function main() {
-
 	try {
-
 		await app.dbConnect();
 
 		console.log(`Populating disks/partitions...`);
@@ -59,12 +56,15 @@ var searches = [
 	
 		var hashFileCount = 0;
 		console.log(`Hashing files...`);
-		var results = await File
-			.find({ hash: { $exists: false } })
-			.doHashes();
+		var q = File
+			.find({ hash: { $exists: false } });
+		console.verbose(`q funcs: ${_.functionsIn(q).join(', ')}`);
+			// .doHashes();
+			// .map(f => f.doHash());
+		var results = await q;
 		console.verbose(`results=${inspect(results)}`);
 			
-		for await (let f of results.cursor())
+		for await (let f of results/*.cursor()*/)
 		{
 			if (f.hash) {
 				hashCount++;
@@ -83,7 +83,6 @@ var searches = [
 	}
 
 	await app.quit();
-
 })();
 
 // .then(() => {
