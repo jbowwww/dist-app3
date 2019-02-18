@@ -5,6 +5,7 @@ const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0
 const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
+const pMap = require('p-map');
 const hashFile = require('./fs/hash.js');
 const fs = require('fs');
 const fsIterate = require('./fs/iterate.js').iterate;
@@ -33,13 +34,13 @@ var searches = [
 		await Disk.findOrPopulate();
 
 		console.log(`Searching filesystems: ${inspect(searches, { compact: false })}`);
-		await Q.all( _.map( searches, async search => {
+		await pMap(searches, async search => {
 			for await (let f of fsIterate(search)) {
 				f = await FsEntry.findOrCreate(f);
 				console.debug(`f.path: '${f.path}'`);
 				await (f.fileType === 'dir' ? f.save() : f.bulkSave());
 			}
-		}));
+		});
 
 // another possibility, that could allow for timing, debug/stats, etc
 // await app.run( Disk.findOrPopulate() );
