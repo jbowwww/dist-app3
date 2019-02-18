@@ -6,12 +6,14 @@ const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
 const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
+const statPlugin = require('./stat.js');
 
 /* By default, define middleware hooks for any static or instance method,
  * by overriding schema.prototype.static and schema.prototype.method
  * This behaviour can be disabled by supplying an options object as 
  * 3rd param to static() or method() with options.noCustomMiddleare = true
  */
+// 190218 Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
 module.exports = function customHooksSchemaPlugin(schema, options) {
 
 	console.debug(`customHooksSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
@@ -22,6 +24,7 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 		} else if (!_.isFunction(fn)) {
 			throw new TypeError('fn should be a function');
 		}
+		schema.plugin(statPlugin, [ name ]);
 		// console.verbose(`schema: ${_.keys(schema.s.hooks).join(', ')}`);
 		// schema.s.hooks.hook.call(schema.s.hooks, name, fn);
 		// return mongoose.Schema.prototype.static.call(name, fn, options);
@@ -49,6 +52,7 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 		} else if (!_.isFunction(fn)) {
 			throw new TypeError('fn should be a function');
 		}
+		schema.plugin(statPlugin, [ name ]);
 		const schemaHooksExecPost = Q.denodeify(schema.s.hooks.execPost.bind(schema.s.hooks));
 		return mongoose.Schema.prototype.method.call(this, name,
 			options.noCustomMiddleware ? fn : function(...args) {

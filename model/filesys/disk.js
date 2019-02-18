@@ -22,12 +22,10 @@ let disk = new mongoose.Schema({
 	defaultFindQuery: ['name', 'vendor', 'model', 'serial']//{ uuid: undefined }
 });
 
-disk.plugin(require('../plugin/custom-hooks.js'));
-disk.plugin(require('../plugin/timestamp.js'));
 disk.plugin(require('../plugin/standard.js'));
 disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
-// dosk.plugin(require('../plugin/stat.js'), { data: { save: {}, validate: {}, bulkSave: {}, ensureCurrentHash: {} } });
+// disk.plugin(require('../plugin/stat.js'), [ 'findOrPopulate' ]);
 
 var disks = [], partitions = [];
 
@@ -57,7 +55,7 @@ disk.static('findOrPopulate', function findOrPopulate() {
 	.then(() => { console.verbose(`${debugPrefix}: devices[${disks.length}] = ${inspect(disks)}\n` + `partitions[${partitions.length}] = ${inspect(partitions.length)}`); })
 	.catch(e => {
 		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
-		model._stats.errors.push(err);
+		model._stats.findOrPopulate.errors.push(err);
 		// throw e;
 	});
 

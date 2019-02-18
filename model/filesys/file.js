@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -13,9 +13,6 @@ let file = new mongoose.Schema({
 	hash: { type: String, /*default: '',*/ required: false },
 	hashUpdated: { type: Date, /*default: 0,*/ required: false }
 });
-
-file.plugin(require('../plugin/stat.js'), { ensureCurrentHash: {} });
-
 
 // file.post('save', async function() {
 // 	var model = this.constructor;
@@ -31,7 +28,6 @@ file.plugin(require('../plugin/stat.js'), { ensureCurrentHash: {} });
 // 	}
 // });
 
-
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
 file.virtual('extension').get(function extension() {
 	var n = this.path.lastIndexOf('.');
@@ -39,28 +35,28 @@ file.virtual('extension').get(function extension() {
 	return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
 });
 
-file.methods.doHash = function() {
+file.method('doHash', function doHash() {
 	var file = this;
 	var model = this.constructor;
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
 	console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
-	model._stats.ensureCurrentHash.calls++;
+	model._stats.doHash.calls++;
 	return hashFile(file.path).then((hash) => {
-		model._stats.ensureCurrentHash.success++;
-		if (!file.hash) { model._stats.ensureCurrentHash.created++; }
-		else { model._stats.ensureCurrentHash.updated++; }
+		model._stats.doHash.success++;
+		if (!file.hash) { model._stats.doHash.created++; }
+		else { model._stats.doHash.updated++; }
 		file.hash = hash;
 		file.hashUpdated = Date.now();
 		console.verbose(`${debugPrefix}.doHash(): file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
 		return file;
 	}).catch(err => {
-		model._stats.ensureCurrentHash.errors.push(err);
+		model._stats.doHash.errors.push(err);
 		console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
 		// return file;	// should i really actually be catching an err then returning file like nothing happened??
 		// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
 		throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
 	});	
-};
+});
 
 file.query.hasHash = function() { return this.exists('hash'); };
 

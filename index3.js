@@ -13,6 +13,8 @@ const fs = require('fs');
 const fsIterate = require('./fs/iterate.js').iterate;
 const mongoose = require('mongoose');	
 mongoose.Promise = Q;
+const pEvent = require('p-event');
+const pMap = require('p-map');
 
 	// const FileSys = require('./model/filesys');
 	const Disk = require('./model/filesys/disk.js');
@@ -20,7 +22,7 @@ mongoose.Promise = Q;
 	const File = require('./model/filesys/file.js');
 	const Dir = require('./model/filesys/dir.js');// } = FileSys;
 	const Audio = require('./model/audio.js');
-	const Artefact = require('./Artefact.js');
+	// const Artefact = require('./Artefact.js');
 
 const app = require('./app.js');
 var promisePipeOptions = { catchErrors: app.onError };
@@ -52,15 +54,24 @@ var promisePipeOptions = { catchErrors: app.onError };
 //	pipeline(sourceStream, writeable)
 		// { $match: { operation: "insert", hash: null  } }
 
-app.dbConnect()
-.then(() => streamPromise(
-	File.watch([]).on('change', change => {
-		console.log(`change: insert: _id=${inspect(change)}`);	//.documentKey
-	}).on('error', err => console.error(`Other error: ${err.stack||err}`)),
-	{ resolveEvent: 'end' }))
-.catch(err => console.error(`Other error: ${err.stack||err}`))
-.then(() => app.quit())
-.done();
+(async function main() {
+	try {
+		await app.dbConnect();
+		await pEvent(
+			File.watch([])
+			.on('change', change => {
+				console.log(`change: insert: _id=${inspect(change)}`);	//.documentKey
+			})
+			.on('error', err => {
+				console.error(`Other error: ${err.stack||err}`);
+			}),
+			{ resolveEvent: 'end' });
+		console.log(`done watching`);
+	} catch (err) {
+		console.error(`Other error: ${err.stack||err}`);
+	}
+	await app.quit();
+})();
 
 // (function looper() { return Q.delay(1000).then(looper); })();
 

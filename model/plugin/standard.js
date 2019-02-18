@@ -5,25 +5,38 @@ const _ = require('lodash');
 const Q = require('q');
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('../../promise-pipe.js');
 const mongoose = require('mongoose');
-const statPlugin = require('./stat.js');
 
-// TODO: Work out separation of concerns with model._stats and all your separate plugins e.g. bulksave (stat plugin is more of a plugin plugin)
+const plugins = {
+	timestamp: require('./timestamp.js'),
+	customHooks: require('./custom-hooks.js'),
+	stat: require('./stat.js')
+};
 
 /* Standard/common schema methods, statics
  */
 module.exports = function standardSchemaPlugin(schema, options) {
 
 	var discriminatorKey = schema.get('discriminatorKey');
-	console.verbose(`standardSchemaPlugin(): schema.obj='${inspect(schema.obj)}', options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
+	console.debug(`standardSchemaPlugin(): options=${inspect(options)}, schema.obj='${inspect(schema.obj)}'`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
+
+	// if issues, one thing to try is put timestamp.js after custom-hooks.js
+
+	// made my own timestamp plugin because i wanted a checkedAt field, not just create and update. Also has some utility methods.
+	schema.plugin(plugins.timestamp);
+	schema.plugin(plugins.customHooks);
+	// ^ Allows pre and post hooks on any methods (instance and static), instead of just a few like mongoose does by default
+	// Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
 	
 	schema.static('construct', function construct(data, cb) {
 		return Q(new (this)(data));
 	});
 
-	const trackedMethods = [ "validate", "save", "bulkSave"/*, "upsert" */];
-	schema.plugin(statPlugin, { data: _.fromPairs(_.map(trackedMethods, methodName => ([methodName, {}]))) });
-	_.forEach(trackedMethods, function(methodName) {
-		
+	const trackedMethods = {
+		instance: [ "validate", "save", "bulkSave" ],
+		static: [ "upsert" ]
+	};
+	schema.plugin(plugins.stat, trackedMethods.instance);//, methodName => ([methodName, {}]));
+	_.forEach(trackedMethods.instance, function(methodName) {
 		schema.pre(methodName, function(next) {
 			var doc = this instanceof mongoose.Document ? this : null;
 			var model = doc ? doc.constructor : this;
@@ -41,7 +54,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc=${doc._id}  doc._actions=${inspect(doc._actions)}
 			next();
 		});
-
 		schema.post(methodName, function(res, next) {
 			var doc = this instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
 			var model = doc ? doc.constructor : this;
@@ -57,12 +69,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			console.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
-
 		schema.post(methodName, function(err, res, next) {
-			var doc = this;// instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
+			// var doc = this;// instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
+			var doc = this instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
 			var model = /*doc ?*/ doc.constructor/* : this*/;
 			// console.log(`[doc ${model.modelName}].post('${methodName}'): #1 doc.path='${doc.path}'`);
 			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
+			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 
 			// console.log(`[doc ${model.modelName}].post('${methodName}'): #2 doc.path='${doc.path}'`);
 						var eventName = 'err.' + methodName;
@@ -75,46 +88,42 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			// if (doc) {
 				doc.emit(eventName, err);			// i wonder what this gets bound as? in any case shuld be the doc
 			// }
-			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 			return next(err);
 		});
-
 	});
 
-	schema.plugin(statPlugin, { data: { upsert: {} } });
-
-	schema.pre('upsert', function(doc, next) {
-		var model = this;
-		var eventName = 'pre.upsert';
-		model.emit(eventName, doc);
-		model._stats.upsert.calls++;
-		next();
-	});
-
-	schema.post('upsert', function(res, next) {
-		var model = this;
-		var eventName = 'post.upsert';
-		model.emit(eventName, res);
-		var actionType = res.upserted && res.upserted.length > 0 ? 'create' : res.nModified > 0 ? 'update' : 'check';
-		model._stats.upsert[actionType]++;
-		console.debug(`[model ${model.modelName}].post('upsert'): res=${inspect(res)} model._stats.upsert=${inspect(model._stats.upsert)}`);	// doc=${inspect(doc)} doc._actions=${inspect(doc._actions)}
-		next();
-	});
-
-	schema.post('upsert', function(err, res, next) {
-		var model = this;
-		var eventName = 'err.upsert';
-		model.emit(eventName, res, err);
-		model._stats.upsert.errors.push(err);
-		console.error(`[model ${model.modelName}].post('upsert') ERROR: res=${inspect(res)} model._stats.upsert=${inspect(model._stats.upsert)}: error: ${err.stack||err}`);
-		return next(err);
+	schema.plugin(plugins.stat, trackedMethods.static);
+	_.forEach(trackedMethods.static, function(methodName) {
+		schema.pre(methodName, function(doc, next) {
+			var model = this;
+			var eventName = 'pre.' + methodName;
+			model.emit(eventName, doc);
+			model._stats[methodName].calls++;
+			next();
+		});
+		schema.post(methodName, function(res, next) {
+			var model = this;
+			var eventName = 'post.' + methodName;
+			model.emit(eventName, res);
+			model._stats[methodName].success++;
+			console.debug(`[model ${model.modelName}].post('${methodName}'): res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
+			next();
+		});
+		schema.post(methodName, function(err, res, next) {
+			var model = this;
+			var eventName = 'err.' + methodName;
+			model.emit(eventName, res, err);
+			model._stats[methodName].errors.push(err);
+			console.error(`[model ${model.modelName}].post('${methodName}') ERROR: res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
+			return next(err);
+		});
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
 	 * but only marks paths as modified if the (deep-equal) value actually changed
 	 * I think mongoose is supposed to be able to doc.set() and only mark paths and subpaths that have actually changed, 
 	 * but it hasn't wqorked for me in the past, so i wrote my own. */
-	schema.method('updateDocument', function(update, pathPrefix = '') {
+	schema.method('updateDocument', function updateDocument(update, pathPrefix = '') {
 		var model = this.constructor;
 		if (pathPrefix !== '' && !pathPrefix.endsWith('.')) {
 			pathPrefix += '.';
@@ -188,6 +197,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		.then(r => r ? r.updateDocument(data) : /*model.create*/ model.construct /*new (model)*/ (data))			// .then(doc => _.set(doc, '_actions', {}))
 		.then(doc => options.saveImmediate ? doc.save() : doc);	
 
+	});
+
+	schema.post('upsert', function (res, next) {
+		var actionType = res.upserted && res.upserted.length > 0 ? 'create' : res.nModified > 0 ? 'update' : 'check';
+		this._stats.upsert[actionType]++;
+		next();
 	});
 
 	// What is the difference between these methods and findOrCreate?? I think there was something but it may
@@ -269,8 +284,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	});
 
+	// use a cache for the current query
 	schema.query.useCache = function useCache() {
-
 		var q = this.getQuery();
 		var jq = JSON.stringify(q);
 		var r = schema._cache.get(jq);
@@ -290,13 +305,4 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.query.promisePipe = function promisePipe(...promiseFuncs) {
 		return streamPromise(writeablePromiseStream(...promiseFuncs), { resolveEvent: 'finish' });
 	};
-
-	// schema.query.iter = function iter() { return this.cursor(); };
-	// async function* iter() {
-	// 	const cursor = this./*getQuery().exec().*/cursor();
-	// 	for await (let doc of cursor) {//await cursor.next(); doc != null; doc = await cursor.next()) {
-	// 		// console.log(`iter: doc=${inspect(doc)}iter.done=${inspect(doc.done)}`);// cursor=${inspect(cursor)}`);
-	// 		yield doc;
-	// 	}
-	// };
 };

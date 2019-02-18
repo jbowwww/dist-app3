@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 mongoose.Promise = Q.Promise;
 
 module.exports = function bulkSaveSchemaPlugin(schema, options) {
-	schema.plugin(require('./stat.js'), { data: { bulkSave: {} } });
+	schema.plugin(require('./stat.js'), [ 'bulkSave' ]);
 
 	/* 181222: Note: Don't use bulkSave (at least currently) in a promisePipe unless it is at the END or at the END of a tap chain
 	 * Because currently it returns a bulkwriteopresult and not the document (unless the doc is unmodified requiring no save, then it returns a doc

@@ -41,8 +41,6 @@ var fsEntry = new mongoose.Schema({
 	// toObject: { getters: true }
 });
 
-fsEntry.plugin(require('../plugin/custom-hooks.js'));
-fsEntry.plugin(require('../plugin/timestamp.js'));
 fsEntry.plugin(require('../plugin/standard.js'));
 fsEntry.plugin(require('../plugin/bulk-save.js'));
 fsEntry.plugin(require('../plugin/artefact.js'));

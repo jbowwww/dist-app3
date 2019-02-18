@@ -32,14 +32,15 @@ var searches = [
 		console.log(`Populating disks/partitions...`);
 		await Disk.findOrPopulate();
 
-		// console.log(`Searching filesystems: ${inspect(searches, { compact: false })}`);
-		// await Q.all( _.map( searches, async search => {
-		// 	for await (let f of fsIterate(search)) {
-		// 		f = await FsEntry.findOrCreate(f);
-		// 		console.debug(`f.path: '${f.path}'`);
-		// 		await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-		// 	}
-		// }));
+		console.log(`Searching filesystems: ${inspect(searches, { compact: false })}`);
+		await Q.all( _.map( searches, async search => {
+			for await (let f of fsIterate(search)) {
+				f = await FsEntry.findOrCreate(f);
+				console.debug(`f.path: '${f.path}'`);
+				await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+			}
+		}));
+
 // another possibility, that could allow for timing, debug/stats, etc
 // await app.run( Disk.findOrPopulate() );
 // await app.run( Q.all( _.map( searches, async search => {
@@ -49,35 +50,31 @@ var searches = [
 	// 	await fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
 	// }
 
-		var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
-		var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
-		var totalFileCount = hashedFileCount + unhashedFileCount;
-		console.log(`Counted ${totalFileCount} files... ${hashedFileCount} hashed and ${unhashedFileCount} not`);
-	
-		var hashFileCount = 0;
-		console.log(`Hashing files...`);
-		var q = File
-			.find({ hash: { $exists: false } });
-		console.verbose(`q funcs: ${_.functionsIn(q).join(', ')}`);
-			// .doHashes();
-			// .map(f => f.doHash());
-		var results = await q;
-		console.verbose(`results=${inspect(results)}`);
-			
-		for await (let f of results/*.cursor()*/)
+		async function showHashTotals() {
+			var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
+			var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
+			var totalFileCount = hashedFileCount + unhashedFileCount;
+			console.log(`Counted ${totalFileCount} files... ${hashedFileCount} hashed and ${unhashedFileCount} not`);
+		};
+		await showHashTotals();
+
+		var hashCount = 0;
+		for await (let f of File.find({ hash: { $exists: false } }).cursor())
 		{
-			if (f.hash) {
-				hashCount++;
-				console.verbose(`f.path: '${f.path}' f.hash=${f.hash}`);
-			} else {
-				console.warn(`no hash for f.path='${f.path}'`);
+			if (!f.hash) {
+				try {
+					await f.doHash();
+					hashCount++;
+					console.verbose(`f.path: '${f.path}' f.hash=${f.hash}`);
+					await f.bulkSave();
+				} catch (e) {
+					console.warn(`error hashing for f.path='${f.path}': ${e.stack||e}`);
+				}
 			}
-			// await Q.delay(88);
-			// await pipelines.bulkSave(f);
-		}
-
-		console.verbose(`: '${f.path}' f.hash=${f.hash}`);
-
+		}	
+		console.log(`Done Hashing ${hashCount} files...`);
+		await showHashTotals();
+		
 	} catch (err) {
 		console.error(`main() error: ${err.stack||err}`);
 	}
