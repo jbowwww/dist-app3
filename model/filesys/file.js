@@ -14,6 +14,8 @@ let file = new mongoose.Schema({
 	hashUpdated: { type: Date, /*default: 0,*/ required: false }
 });
 
+file.plugin(require('../plugin/stat.js'), [ 'doHash' ]);
+
 // file.post('save', async function() {
 // 	var model = this.constructor;
 // 	var debugPrefix = `[doc ${model.modelName}]`;//`[${typeof model} ${model.modelName}]`;
@@ -39,7 +41,7 @@ file.method('doHash', function doHash() {
 	var file = this;
 	var model = this.constructor;
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
-	console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
+	// console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
 	model._stats.doHash.calls++;
 	return hashFile(file.path).then((hash) => {
 		model._stats.doHash.success++;

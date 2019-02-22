@@ -22,26 +22,37 @@ const app = require('./app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 2 }
+	{ path: '/mnt/media', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
+
+var tasks = {
+
+	populateDisks: app.Task(`Populating disks/partitions`, async function () {
+		await Disk.findOrPopulate();
+	}),
+
+	searchFilesystem: app.Task(`Searching filesystem`, async function (search) {
+		for await (let f of fsIterate(search)) {
+			f = await FsEntry.findOrCreate(f);
+			console.debug(`f.path: '${f.path}'`);
+			await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+		}
+	}),
+	searchFilesystems: app.Task(`Searching filesystems`, async function (searches) {		// : ${inspect(searches, { compact: false })}
+		await pMap(searches, async search => await tasks.searchFilesystem(search));
+	})
+
+};
+
+console.verbose(`tasks: ${inspect(tasks)}`);
 
 (async function main() {
 	try {
 		await app.dbConnect();
 
-		console.log(`Populating disks/partitions...`);
-		await Disk.findOrPopulate();
-
-		console.log(`Searching filesystems: ${inspect(searches, { compact: false })}`);
-		await pMap(searches, async search => {
-			for await (let f of fsIterate(search)) {
-				f = await FsEntry.findOrCreate(f);
-				console.debug(`f.path: '${f.path}'`);
-				await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-			}
-		});
-
+		await tasks.populateDisks();
+		await tasks.searchFilesystems(searches);
 // another possibility, that could allow for timing, debug/stats, etc
 // await app.run( Disk.findOrPopulate() );
 // await app.run( Q.all( _.map( searches, async search => {

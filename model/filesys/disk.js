@@ -1,10 +1,11 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/disk', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const { promisifyMethods } = require('../../utility.js');
 const _ = require('lodash');
 const mongoose = require('mongoose');
-const Q = require('q');
+// const Q = require('q');
+const pMap = require('p-map');
 const getDevices = require('../../fs/devices.js');
 const { Partition } = require('./index.js');//mongoose.model('partition');// require('./partition.js');
 
@@ -27,24 +28,33 @@ disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
 // disk.plugin(require('../plugin/stat.js'), [ 'findOrPopulate' ]);
 
-var disks = [], partitions = [];
-
-disk.static('findOrPopulate', function findOrPopulate() {
+disk.static('findOrPopulate', async function findOrPopulate() {
 	
 	var model = this;
 	var debugPrefix = `[model ${model.modelName}].findOrPopulate()`;
 	var dbOpt = { saveImmediate: true };
 
-	return getDevices()
-	.then(jsonDevices => { console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`); return jsonDevices; })
-	.then(jsonDevices => Q.all(_.map(jsonDevices, disk => model.findOrCreate(disk, dbOpt)
-		.then(diskDoc => (function mapPartitions(container, containerPartitionDoc) {
-			return (!container || !container.children ? Q(null)			// disks.push(diskDoc);
-			 : 	Q.all(_.map(container.children, partition => Partition.findOrCreate(_.assign(partition, { disk: diskDoc, container: containerPartitionDoc}), dbOpt)
-				// .tap(partitionDoc => partitions.push(partitionDoc))
-				.tap(partitionDoc => console.verbose(`partitionDoc=${inspect(partitionDoc)}`))		// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
-				.then(partitionDoc => mapPartitions(partition, partitionDoc)) )))
-		})(disk)) )))
+	let jsonDevices = await getDevices();
+	console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
+	try {
+		await pMap(jsonDevices, async disk => {
+			let diskDoc = await model.findOrCreate(disk, dbOpt);
+			await (async function mapPartitions(container, containerPartitionDoc) {
+				return (!container || !container.children ? null
+				 : 	await pMap(container.children, async partition => {
+					 	_.assign(partition, { disk: diskDoc, container: containerPartitionDoc });
+					 	let partitionDoc = await Partition.findOrCreate(partition, dbOpt);
+						console.verbose(`partitionDoc=${inspect(partitionDoc)}`);	// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
+						return await mapPartitions(partition, partitionDoc);
+					}) );
+			})(disk);
+		});
+	} catch (e) {
+		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
+		model._stats.findOrPopulate.errors.push(err);
+		// throw e;
+	}
+});
 		
 	// these collections should be relatively small, and will be referred to by all fsEntry objects, so cache locally
 	// .then(() => Q.all([
@@ -52,14 +62,7 @@ disk.static('findOrPopulate', function findOrPopulate() {
 	// 	Partition.find({}).then(_partitions => partitions = _partitions)
 	// ]))
 
-	.then(() => { console.verbose(`${debugPrefix}: devices[${disks.length}] = ${inspect(disks)}\n` + `partitions[${partitions.length}] = ${inspect(partitions.length)}`); })
-	.catch(e => {
-		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
-		model._stats.findOrPopulate.errors.push(err);
-		// throw e;
-	});
-
-});
+	// .then(() => { console.verbose(`${debugPrefix}: devices[${disks.length}] = ${inspect(disks)}\n` + `partitions[${partitions.length}] = ${inspect(partitions.length)}`); })
 
 disk.static('getPartitionForPath', function getPartitionForPath(path) {
 	return this.find().then(disks => {

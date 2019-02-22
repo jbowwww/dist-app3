@@ -19,7 +19,6 @@ module.exports = function statSchemaPlugin(schema, options) {
 	options = _.merge({ validate: {}, save: {}, bulkSave: {} },
 		_.isPlainObject(options) ? options
 	 : 	_.fromPairs(_.map(options, methodName => ([methodName, {}]))));
-	console.verbose(`standardSchemaPlugin(): options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 
 	if (schema._stats === undefined) {
 		schema.on('init', initModelStats);
@@ -28,6 +27,7 @@ module.exports = function statSchemaPlugin(schema, options) {
 	_.assign(schema._stats, schema._stats || {}, options);
 
 	function initModelStats(model) {
+		console.verbose(`[model ${model.modelName}].on('init') schema._stats=${inspect(schema._stats)}`);//options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 		Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value: _.create({
 			[util.inspect.custom]: function() {
 				return _.pickBy(this, (v, k) => 

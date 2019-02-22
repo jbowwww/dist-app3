@@ -19,13 +19,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	var discriminatorKey = schema.get('discriminatorKey');
 	console.debug(`standardSchemaPlugin(): options=${inspect(options)}, schema.obj='${inspect(schema.obj)}'`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 
-	// if issues, one thing to try is put timestamp.js after custom-hooks.js
-
-	// made my own timestamp plugin because i wanted a checkedAt field, not just create and update. Also has some utility methods.
-	schema.plugin(plugins.timestamp);
-	schema.plugin(plugins.customHooks);
-	// ^ Allows pre and post hooks on any methods (instance and static), instead of just a few like mongoose does by default
-	// Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
+	schema.plugin(plugins.timestamp);	// made my own timestamp plugin because i wanted a checkedAt field, not just create and update. Also has some utility methods.
+	schema.plugin(plugins.customHooks);	// ^ Allows pre and post hooks on any methods (instance and static), instead of just a few like mongoose does by default
+										// Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
 	
 	schema.static('construct', function construct(data, cb) {
 		return Q(new (this)(data));
@@ -33,9 +29,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	const trackedMethods = {
 		instance: [ "validate", "save", "bulkSave" ],
-		static: [ "upsert" ]
+		static: [ "findOrCreate", "upsert" ]
 	};
-	schema.plugin(plugins.stat, trackedMethods.instance);//, methodName => ([methodName, {}]));
+	schema.plugin(plugins.stat, trackedMethods.instance);
 	_.forEach(trackedMethods.instance, function(methodName) {
 		schema.pre(methodName, function(next) {
 			var doc = this instanceof mongoose.Document ? this : null;
@@ -94,12 +90,12 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	schema.plugin(plugins.stat, trackedMethods.static);
 	_.forEach(trackedMethods.static, function(methodName) {
-		schema.pre(methodName, function(doc, next) {
+		schema.pre(methodName, function(/*doc,*/ next) {
 			var model = this;
 			var eventName = 'pre.' + methodName;
-			model.emit(eventName, doc);
+			model.emit(eventName/*, doc*/);
 			model._stats[methodName].calls++;
-			next();
+			next();	// something wrong with my implementation of [Model].static? I'm not getting a next() function from findOrCreate, and maybe 
 		});
 		schema.post(methodName, function(res, next) {
 			var model = this;
@@ -199,11 +195,11 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	});
 
-	schema.post('upsert', function (res, next) {
-		var actionType = res.upserted && res.upserted.length > 0 ? 'create' : res.nModified > 0 ? 'update' : 'check';
-		this._stats.upsert[actionType]++;
-		next();
-	});
+	// schema.post('upsert', function (res, next) {
+	// 	var actionType = res.upserted && res.upserted.length > 0 ? 'create' : res.nModified > 0 ? 'update' : 'check';
+	// 	this._stats.upsert[actionType]++;
+	// 	next();
+	// });
 
 	// What is the difference between these methods and findOrCreate?? I think there was something but it may
 	// be so subtle and minor that it is not worth having both

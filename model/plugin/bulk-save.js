@@ -8,6 +8,13 @@ Q.longStackSupport = true;
 const mongoose = require('mongoose');
 mongoose.Promise = Q.Promise;
 
+/* 190219: TODO: modify this implementation to act more analogous to Model.save() -
+ *	1) return (fulfill) with document, from each call
+ *	2) do so, a la Model.save(), as soon as the underlying collection method (bulkWrite) is called, not in callback as currently is
+ * Attach bulkWrite() result as a (non-enumerable) property on each document in the bulk write? so calling code can still access
+ * somehow, but the return value is still the document, so that this method can be used in pipelines
+ */
+
 module.exports = function bulkSaveSchemaPlugin(schema, options) {
 	schema.plugin(require('./stat.js'), [ 'bulkSave' ]);
 
@@ -27,43 +34,22 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 		}, options);
 
 		return doc.validate().then(() => {
-				
-				// insert, update, or do nothing depending if the doc is new, updated or unmodified
-				// var actionType = doc._actions['bulkSave'];//doc.isNew ? 'created' : /*doc._id !== null && */doc.isModified() ? 'updated' : 'checked';
-				// model._stats.bulkSave[actionType]++;
-				// model._stats.bulkSave.calls++;
 				console.verbose(`[model ${model.modelName}].bulkSave isNew=${doc.isNew} isModified()=${doc.isModified()} modifiedPaths=${doc.modifiedPaths()}`);// model._bulkSaveDeferred.promise.state=${model._bulkSaveDeferred?model._bulkSaveDeferred.promise.state:'(undefined)'}`);	// action=${actionType}
-				// if (actionType === 'check') {
-				// 	model._stats.bulkSave.success++;
-				// 	return Q(doc);//(doc);
-				// }
+				
 				if (!model._bulkSave) {
 					model._bulkSave = [];
-					// _.set(model, '_bulkSaveDeferred', Q.defer());
 				} else if (model._bulkSave.indexOf(doc) >= 0) {
 					console.verbose(`[model ${model.modelName}].bulkSave doc._id=${doc._id}: doc already queued for bulkWrite`);// (array index #${di}`); //  action=${actionType}
 					return Q(doc);
 				}
-
 				var deferred = Q.defer();
 				model._bulkSave.push({ doc, deferred, opIndex: model._bulkSave.length });
 				if (model._bulkSave.length >= options.maxBatchSize) {
-					// if (model._bulkSaveTimeout) {
-					// 	clearTimeout(model._bulkSaveTimeout);
-					// 	delete model._bulkSaveTimeout;
-					// }
-					/*process.nextTick(() => */innerBulkSave();
+					innerBulkSave();
 				} else if (!model._bulkSaveTimeout) {
 					model._bulkSaveTimeout = setTimeout(() => innerBulkSave(), options.batchTimeout);
 				} 
-
-				// else {
-				// 	return model._bulkSaveDeferred/*.promise*/;
-				// }
-			return deferred.promise;//.timeout(20000, `Error bulk writing doc: ${inspect(doc)}`);
-				// resolves the return promise with the document queued for bulk writing, although it is not written yet
-				// resolve(doc);
-				// return Q(doc);//model._bulkSaveDeferred.promise;
+				return deferred.promise;//.timeout(20000, `Error bulk writing doc: ${inspect(doc)}`);
 				
 				// Perform actual bulk save
 				function innerBulkSave() {
