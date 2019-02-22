@@ -49,6 +49,79 @@ var app = {
 	Task,
 	tasks: {},
 
+	_tasks: {
+		running: [],
+		finished: [],
+		get all() { return _.concat(this.running, this.finished); }
+	},
+	// _taskCount: 0,
+	async run(name, fn) {
+
+		if (_.isFunction(name) && arguments.length === 1) {
+			fn = name;
+			name = fn.name || `Task #${++this._taskCount}`;
+		} else if (!_.isString(name)) {
+			throw new TypeError(`name should be a string but is ${typeof name}`);
+		}
+		if (!_.isFunction(fn)) {
+			throw new TypeError(`fn should be function but is ${typeof fn}`);
+		} else if (fn.length < 1) {
+			throw new TypeError(`fn should take at least 1 argument, but takes ${fn.length}`);
+		}
+		
+		let task = {
+			name: name,
+			fn,
+			status: 'init',
+			promise: null,
+			r: undefined,
+			startTime: Date.now(),
+			endTime: null,
+			get duration() {
+				return (this.endTime || Date.now()) - this.startTime;
+			},
+			progress: { max: 100, current: 0 },
+			_activeLastTimestamp: Date.now(),
+			_activeTimeout: 10,
+			markActive(timeout = 10) {
+				this._activeLastTimestamp = Date.now();
+				this._activeTimeout = timeout;
+			},
+			get isActive() {
+				return (Date.now() - this._activeLastTimestamp >= this._activeTimeout);
+			},
+			async* queryProgress(query) {
+				console.verbose(`queryProgress: query=${inspect(query.getQuery())}`);
+				let count = await query.countDocuments();
+				this.progress.max = count;
+				this.progress.current = 0;
+				for await (let r of query.cursor()) {
+					this.markActive();
+					yield await r;
+					this.progress.current++;
+				}
+			},
+			async* trackProgress(generator) {
+				for await (let r of generator) {
+					_.assign(this.progress, generator.task);
+					yield await r;
+				}
+			}
+
+		};
+		this._tasks.running.push(task);
+		console.verbose(`Starting task '${task.name}'`);
+		task.status = 'running';
+		task.promise = fn(task);
+		task.r = await task.promise;
+		this._tasks.running.splice(this._tasks.running.indexOf(task), 1);
+		task.status = 'finished';
+		task.endTime = Date.now();
+		this._tasks.finished.push(task);
+		console.verbose(`Finished task '${task.name}' in ${task.duration} ms: r=${inspect(task.r)} app._tasks=${inspect(app._tasks)}`);
+	
+	},
+
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
 			`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}`);
