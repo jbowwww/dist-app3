@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 mongoose.Promise = Q;
 
 const app = require('./app.js');
+const expressApp = require('./express-app.js');
 
 	// const FileSys = require('./model/filesys');
 	const Disk = require('./model/filesys/disk.js');
@@ -52,8 +53,9 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 (async function main() {
 	try {
 		await app.dbConnect();
+console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		await app.run( 'diskPopulate',	task	=> 	Disk.findOrPopulate() );
+		await app.run( 'diskPopulate',	task	=> 	Disk.findOrPopulate(task) );
 		
 		await pMap(searches, async search => app.run( 'fsSearch', async task => {
 			for await (let f of task.trackProgress(fsIterate(search))) {

@@ -68,7 +68,7 @@ _.assign(iterate.prototype, self);
 		for (let i = 0; i < self.paths.length; i++) { //self.paths.length) {
 			var path = self.paths[i];//options.queueMethod]();
 			
-			self.task.max = self.paths.length;
+			self.task.max = self.paths.length - 1;
 			self.task.current = i;
 
 			var stats = await nodeFs.lstat(path);

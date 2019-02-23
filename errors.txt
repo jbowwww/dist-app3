@@ -1,1 +1,1 @@
-SyntaxError: await is only valid in async function
+SyntaxError: await is only valid in async functionError: Cannot find module 'express'

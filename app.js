@@ -80,7 +80,11 @@ var app = {
 			get duration() {
 				return (this.endTime || Date.now()) - this.startTime;
 			},
-			progress: { max: 100, current: 0 },
+			progress: {
+				max: 100,
+				current: 0,
+				get percentage() { return this.current * 100 / this.max; }
+			},
 			_activeLastTimestamp: Date.now(),
 			_activeTimeout: 10,
 			markActive(timeout = 10) {
