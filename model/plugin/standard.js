@@ -22,7 +22,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.plugin(plugins.timestamp);	// made my own timestamp plugin because i wanted a checkedAt field, not just create and update. Also has some utility methods.
 	schema.plugin(plugins.customHooks);	// ^ Allows pre and post hooks on any methods (instance and static), instead of just a few like mongoose does by default
 										// Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
-	
+										// Alternatively: Change static and method methods in customHooks so instead of always using pre and post, unless using
+										// hooks is necessary, it just creates stat entries, and creates schema method wrappers that increase stat counters
 	schema.static('construct', function construct(data, cb) {
 		return Q(new (this)(data));
 	});
@@ -286,13 +287,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var jq = JSON.stringify(q);
 		var r = schema._cache.get(jq);
 		if (!r) {
-			console.verbose(`useCache: new q '${inspect(q, { compact: true })}'`);
+			console.debug(`useCache: new q '${inspect(q, { compact: true })}'`);
 			return this.exec().then(r => {
-				schema._cache.set(jq, r);
+				schema._cache.set(jq, { created: Date.now(), expire hits: 0, result: r });
 				return Q(r);
 			});
 		} else {
-			console.verbose(`useCache: found '${inspect(q, { compact: true })}'`);
+			console.debug(`useCache: found '${inspect(q, { compact: true })}'`);
 			return Q(r);
 		}
 	};

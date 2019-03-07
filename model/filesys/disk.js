@@ -30,35 +30,38 @@ disk.plugin(require('../plugin/artefact.js'));
 
 disk.static('findOrPopulate', async function findOrPopulate(task) {
 	
+	// this task stuff is an experiment with how i might be able to automagically track task executions.
+	// The data kept in this tracking may vary, but could be progress, expected max/current, exec time,
+	// cpu time sys/user, promises & async id's? (prob overkill)
 	var model = this;
 	var debugPrefix = `[model ${model.modelName}].findOrPopulate()`;
 	var dbOpt = { saveImmediate: true };
 
 	var pr = getDevices();
-	console.log(`getDevices: pr=${inspect(pr)}`);
+	// console.log(`getDevices: pr=${inspect(pr)}`);
 	let jsonDevices = await pr;// getDevices();
 	console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
 	try {
-		task.progress.max = jsonDevices.length;
+		// task.progress.max = jsonDevices.length;
 		await pMap(jsonDevices, async disk => {
 			let diskDoc = await model.findOrCreate(disk, dbOpt);
 			await (async function mapPartitions(container, containerPartitionDoc) {
-				if (container && container.children) {
-					task.progress.max += container.children.length;
-				}
+				// if (container && container.children) {
+					// task.progress.max += container.children.length;
+				// }
 				return (!container || !container.children ? null
 				 : 	await pMap(container.children, async partition => {
 					 	_.assign(partition, { disk: diskDoc, container: containerPartitionDoc });
 					 	let partitionDoc = await Partition.findOrCreate(partition, dbOpt);
 						console.verbose(`partitionDoc=${inspect(partitionDoc)}`);	// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
 						var mp = await mapPartitions(partition, partitionDoc);
-						task.progress.current += 1;
-						console.verbose(`findOrPopulate task: ${inspect(task)}`);
+						// task.progress.current += 1;
+						// console.verbose(`findOrPopulate task: ${inspect(task)}`);
 						return mp;
 					}) );
 			})(disk);
-			task.progress.current += 1;
-			console.verbose(`findOrPopulate task: ${inspect(task)}`);
+			// task.progress.current += 1;
+			// console.verbose(`findOrPopulate task: ${inspect(task)}`);
 		});
 		await null;
 	} catch (e) {
@@ -67,7 +70,7 @@ disk.static('findOrPopulate', async function findOrPopulate(task) {
 		// throw e;
 	}
 
-	console.log(`getDevices: pr=${inspect(pr)}`);
+	// console.log(`getDevices: pr=${inspect(pr)}`);
 });
 		
 	// these collections should be relatively small, and will be referred to by all fsEntry objects, so cache locally

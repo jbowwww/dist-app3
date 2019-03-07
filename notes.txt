@@ -1,3 +1,8 @@
+190226
+
+https://github.com/guyguyon/node-request-context
+Promise trackingfor app.run(() => ...
+
 190214
 
 	Debug func: output/return a parameter's:

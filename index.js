@@ -23,7 +23,7 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 1 }
+	{ path: '/mnt/media', maxDepth: 0 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -51,18 +51,20 @@ var tasks = {
 console.verbose(`tasks: ${inspect(tasks)}`);
 
 (async function main() {
+	
 	try {
+	
 		await app.dbConnect();
-console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
+		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		await app.run( 'diskPopulate',	task	=> 	Disk.findOrPopulate(task) );
+		await app.run( 'diskPopulate', () => Disk.findOrPopulate() );
 		
-		await pMap(searches, async search => app.run( 'fsSearch', async task => {
-			for await (let f of task.trackProgress(fsIterate(search))) {
-				f = await FsEntry.findOrCreate(f);
+		await pMap(searches, async search => await app.run( 'fsSearch', async task => {
+			for await (let f of /*task.trackProgress*/(fsIterate(search))) {
+				f = await FsEntry.findOrCreate(f); 
 				console.debug(`f.path: '${f.path}'`);
 				await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-				console.verbose(`task=${inspect(task)}`);
+				// console.verbose(`task=${inspect(task)}`);
 			}
 		}));
 
@@ -86,16 +88,15 @@ console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findO
 			await showHashTotals();
 
 			var hashCount = 0;
-			for await (let f of task.queryProgress(File.find({ hash: { $exists: false } }))) {	//q.cursor())
+			for await (let f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).cursor()) {	//q.cursor())
+				hashCount++;
 				try {
 					await f.doHash();
-					hashCount++;
-					console.verbose(`f.path: '${f.path}' f.hash=${f.hash}`);
 					await f.bulkSave();
 				} catch (e) {
 					console.warn(`error hashing for f.path='${f.path}': ${e.stack||e}`);
 				} finally {
-					console.verbose(`task=${inspect(task)}`);
+					// console.verbose(`task=${inspect(task)}`);
 				}
 			}
 			console.log(`Done Hashing ${hashCount} files...`);
@@ -104,9 +105,9 @@ console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findO
 
 	} catch (err) {
 		console.error(`main() error: ${err.stack||err}`);
+	} finally {
+		await app.quit();
 	}
-
-	await app.quit();
 })();
 
 // .then(() => {

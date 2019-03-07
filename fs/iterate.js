@@ -63,7 +63,7 @@ async function* iterate(options) {
 		promisePipe(...args) { return /*stream.finished*/(pipeline(self, new PromisePipe(...args).stream())); },
 		task: { max: 1, current: 0 }
 	};
-_.assign(iterate.prototype, self);
+// _.assign(iterate.prototype, self);
 	// yield (async function* next() {
 		for (let i = 0; i < self.paths.length; i++) { //self.paths.length) {
 			var path = self.paths[i];//options.queueMethod]();

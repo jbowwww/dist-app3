@@ -7,6 +7,8 @@ const Q = require('q'); Q.longStackSupport = true;
 const fs = require('fs');
 const mongoose = require('mongoose');
 
+const { createNamespace } = require('node-request-context');
+
 	/// THIS IS THE WEIRDEST SHIT.
 	// IT MADE MODEL.FIND() RETURN A FUNCTION (THAT LOOKED LIKE A PROMISE EXECUTOR)
 	// nO ERRORS NO THING, FUCKED MY HEAD FOR HOURS
@@ -18,6 +20,8 @@ const mongoose = require('mongoose');
 	//
 
 var app = {
+
+	_namespace: createNamespace('myapp.mynamespace'),
 
 	db: {},// { connection: undefined, url: undefined },
 	async dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
@@ -65,9 +69,9 @@ var app = {
 		}
 		if (!_.isFunction(fn)) {
 			throw new TypeError(`fn should be function but is ${typeof fn}`);
-		} else if (fn.length < 1) {
+		} /*else if (fn.length < 1) {
 			throw new TypeError(`fn should take at least 1 argument, but takes ${fn.length}`);
-		}
+		}*/
 		
 		let task = {
 			name: name,
@@ -112,11 +116,11 @@ var app = {
 				}
 			}
 
-		};
+		}; 
 		this._tasks.running.push(task);
 		console.verbose(`Starting task '${task.name}'`);
 		task.status = 'running';
-		task.promise = fn(task);
+		task.promise = this._namespace.run(fn);//() => fn(task));
 		task.r = await task.promise;
 		this._tasks.running.splice(this._tasks.running.indexOf(task), 1);
 		task.status = 'finished';
