@@ -57,28 +57,18 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await app.dbConnect();
 		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		await app.run( 'diskPopulate', () => Disk.findOrPopulate() );
+		await new Task(diskPopulate() => Disk.findOrPopulate()).run();
 		
-		await pMap(searches, async search => await app.run( 'fsSearch', async task => {
+		await pMap(searches, async search => await new Task(async fsSearch(task) => {
 			for await (let f of /*task.trackProgress*/(fsIterate(search))) {
 				f = await FsEntry.findOrCreate(f); 
 				console.debug(`f.path: '${f.path}'`);
 				await (f.fileType === 'dir' ? f.save() : f.bulkSave());
 				// console.verbose(`task=${inspect(task)}`);
 			}
-		}));
+		}).run());
 
-		
-// another possibility, that could allow for timing, debug/stats, etc
-// await app.run( Disk.findOrPopulate() );
-// await app.run( Q.all( _.map( searches, async search => {
-	// for /*await */(var fse of fsIterate(search)) {
-	// 	await FsEntry.findOrCreate(fse);		// fse => FsEntry.upsert(fse) )	// can't use document instance methods or schemas, etc, is just a POJO
-	// 	console.log(`fse.path: '${fse.path}'`);
-	// 	await fse.fileType === 'dir' ? fse.save() : fse.bulkSave()
-	// }
-
-		await app.run( 'hashFiles', async task => {
+		await new Task(async hashFiles(task) => {
 			async function showHashTotals() {
 				var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
 				var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
@@ -101,12 +91,16 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 			}
 			console.log(`Done Hashing ${hashCount} files...`);
 			await showHashTotals();
-		});
+		}).run();
 
 	} catch (err) {
+
 		console.error(`main() error: ${err.stack||err}`);
+
 	} finally {
+
 		await app.quit();
+
 	}
 })();
 
