@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 
 var app = {
 
-	_namespace: createNamespace('myapp.mynamespace'),
+	// _namespace: createNamespace('myapp.mynamespace'),
 
 	db: {},	// { connection: undefined, url: undefined },
 	async dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
@@ -49,8 +49,8 @@ var app = {
 	},
 	// _taskCount: 0,
 
-	/ run(... function funcs) 
-	 * execute an async task registered with the app
+	 run(... function funcs) 
+	 execute an async task registered with the app
 	async run(...funcs) {
 		if (!_.isArray(args) || args.length < 1 || !_.every(args, arg => _.isFunction(arg))) {
 			throw new TypeError(`run(... function functions): has incorrect args: ${inspect(args)}`);
@@ -67,7 +67,8 @@ var app = {
 		this._tasks.finished.push(task);
 		console.verbose(`Finished task '${task.name}' in ${task.duration} ms: r=${inspect(task.r)} app._tasks=${inspect(app._tasks)}`);
 	
-	}*/,
+	}
+	*/
 
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 

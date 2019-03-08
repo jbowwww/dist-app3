@@ -289,7 +289,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		if (!r) {
 			console.debug(`useCache: new q '${inspect(q, { compact: true })}'`);
 			return this.exec().then(r => {
-				schema._cache.set(jq, { created: Date.now(), expire hits: 0, result: r });
+				schema._cache.set(jq, { created: Date.now(), expires: null, hits: 0, result: r });
 				return Q(r);
 			});
 		} else {

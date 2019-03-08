@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 mongoose.Promise = Q;
 
 const app = require('./app.js');
+const Task = require('./Task.js');
 const expressApp = require('./express-app.js');
 
 	// const FileSys = require('./model/filesys');
@@ -28,27 +29,29 @@ var searches = [
 ];
 
 
-
+/*
 var tasks = {
 
-	populateDisks: app.Task(`Populating disks/partitions`, async function () {
+	populateDisks: new Task(async function populateDisks() {
 		await Disk.findOrPopulate();
 	}),
 
-	searchFilesystem: app.Task(`Searching filesystem`, async function (search) {
+	searchFilesystem: new Taskasync function (search) {
 		for await (let f of fsIterate(search)) {
 			f = await FsEntry.findOrCreate(f);
 			console.debug(`f.path: '${f.path}'`);
 			await (f.fileType === 'dir' ? f.save() : f.bulkSave());
 		}
 	}),
-	searchFilesystems: app.Task(`Searching filesystems`, async function (searches) {		// : ${inspect(searches, { compact: false })}
+	searchFilesystems: new Task(`Searching filesystems`, async function (searches) {		// : ${inspect(searches, { compact: false })}
 		await pMap(searches, async search => await tasks.searchFilesystem(search));
 	})
 
 };
 
 console.verbose(`tasks: ${inspect(tasks)}`);
+*/
+
 
 (async function main() {
 	
@@ -57,18 +60,19 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await app.dbConnect();
 		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		await new Task(diskPopulate() => Disk.findOrPopulate()).run();
+		await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
 		
-		await pMap(searches, async search => await new Task(async fsSearch(task) => {
-			for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-				f = await FsEntry.findOrCreate(f); 
-				console.debug(`f.path: '${f.path}'`);
-				await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-				// console.verbose(`task=${inspect(task)}`);
-			}
-		}).run());
+		await pMap(searches, async search =>
+			Task(async function fsSearch(task) {
+				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
+					f = await FsEntry.findOrCreate(f); 
+					console.debug(`f.path: '${f.path}'`);
+					await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+					// console.verbose(`task=${inspect(task)}`);
+				}
+			}).run());
 
-		await new Task(async hashFiles(task) => {
+		await new Task(async function hashFiles(task) {
 			async function showHashTotals() {
 				var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
 				var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
@@ -89,8 +93,10 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 					// console.verbose(`task=${inspect(task)}`);
 				}
 			}
+
 			console.log(`Done Hashing ${hashCount} files...`);
 			await showHashTotals();
+
 		}).run();
 
 	} catch (err) {
