@@ -6,6 +6,7 @@ const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
 const pMap = require('p-map');
+const pAll = require('p-all');
 const hashFile = require('./fs/hash.js');
 const fs = require('fs');
 const fsIterate = require('./fs/iterate.js').iterate;
@@ -62,15 +63,15 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 
 		await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
 		
-		await pMap(searches, async search =>
-			Task(async function fsSearch(task) {
-				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-					f = await FsEntry.findOrCreate(f); 
-					console.debug(`f.path: '${f.path}'`);
-					await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-					// console.verbose(`task=${inspect(task)}`);
-				}
-			}).run());
+		// await pMap(searches, async search =>
+		// 	Task(async function fsSearch(task) {
+		// 		for await (let f of /*task.trackProgress*/(fsIterate(search))) {
+		// 			f = await FsEntry.findOrCreate(f); 
+		// 			console.debug(`f.path: '${f.path}'`);
+		// 			await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+		// 			// console.verbose(`task=${inspect(task)}`);
+		// 		}
+		// 	}).run());
 
 		await new Task(async function hashFiles(task) {
 			async function showHashTotals() {

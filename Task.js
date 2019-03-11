@@ -1,21 +1,53 @@
 
 "use strict";
-const console = require('./stdio.js').Get('Task', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('Task', { minLevel: 'debug' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const cluster = require('cluster');
+const { createNamespace, getNamespace } = require('node-request-context');
+const asyncHooks = require('async_hooks');
+const defaultTaskOptions = {
+	nameIdLength: 1
+};
 
-function Task(fn) {
-	console.debug(`${this instanceof Task ? 'new ' : ''}Task(fn=[function ${fn.name||'(anon)'} [${fn.length||0}]]`);
-	if (!(this instanceof Task)) { return new Task(fn); }
+// [new ]Task([options, ], fn)
+function Task(options, fn) {
+	if (arguments.length === 1) {
+		fn = options;
+		options = {};
+	}
 	if (!_.isFunction(fn)) { throw new TypeError(`fn should be a function but is a ${typeof fn}`); }
-	this.fn = fn;
+	if (!(this instanceof Task)) { return new Task(options, fn); }
+	Object.defineProperty(this, 'rootAsyncId', { enumerable: true, value: asyncHooks.executionAsyncId() });
+	Object.defineProperty(this, 'fn', { enumerable: true, value: fn });
+	Object.defineProperty(this, 'options', { enumerable: true, value: _.defaults(options, defaultTaskOptions) });
+	Object.defineProperty(this, 'id', { enumerable: true, value: Task.generateUniqueTaskId(this.name, this.options.nameIdLength) });
+	this.namespace = createNamespace(this.id);
+	console.debug(`${inspect(this)}`);
 }
+
+Object.defineProperty(Task, 'defaultOptions', { enumerable: true, value: defaultTaskOptions });
+Object.defineProperty(Task, 'names', { enumerable: true, value: [] });
+Object.defineProperty(Task, 'generateUniqueTaskId', {
+	enumerable: true,
+	value: function Task_generateUniqueTaskId(task, length = 1) {
+		var basename = task.name || '(anon)';
+		var baseId = 0;
+		var name;
+		while (Task.names.indexOf(
+			name = `baseName.${baseId.toString().padStart(length)}`
+		) >= 0) {
+			baseId++;
+		}
+		Task.names.push(name);
+		return name; 
+	}
+});
 
 Object.defineProperty(Task, 'created', { enumerable: true, value: [] });;
 Object.defineProperty(Task, 'running', { enumerable: true, value: [] });;
 Object.defineProperty(Task, 'finished', { enumerable: true, value: [] });;
-Object.defineProperty(Task, 'all', { enumerable: true, get: function task_getAll() {
+Object.defineProperty(Task, 'all', { enumerable: true, get: function Task_getAll() {
 	return _.concat(Task.created, Task.running, Task.finished);
 } });
 
@@ -56,7 +88,8 @@ Object.defineProperty(Task.prototype, 'isActive', { enumerable: true, get: funct
 } });
 
 Task.prototype.run = async function task_run(...args) {
-	console.verbose(`Running task '${this.name}' with args=${inspect(args)}ZZ ... `);	
+	const namespace = createNamespace()
+	console.verbose(`Running task '${this.name}' with args=${inspect(args)}, namespace=${inspect(namespace)} ... `);	
 	this._promise = this.fn(...args)
 	.then(r => { console.verbose(`Completed task '${this.name}': r=${inspect(r)}`); return r; })
 	.catch(e => { console.error(`Error in task '${this.name}': ${e.stack||e}`); })

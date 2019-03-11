@@ -98,10 +98,10 @@ var app = {
 		app.logStats();
 		console.log('Press ctrl-c again to quit ...');
 		process.once('SIGINT', quitHandler);
-		Q.delay(1000).then(() => {
+		setTimeout(() => {
 			process.off('SIGINT', quitHandler);
 			process.once('SIGINT', app.onSigInt);
-		}).done();
+		}, 1000);
 		function quitHandler() {
 			app.quit(1, 'Exiting due to SIGINT');
 		}
