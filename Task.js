@@ -31,11 +31,11 @@ Object.defineProperty(Task, 'names', { enumerable: true, value: [] });
 Object.defineProperty(Task, 'generateUniqueTaskId', {
 	enumerable: true,
 	value: function Task_generateUniqueTaskId(task, length = 1) {
-		var basename = task.name || '(anon)';
+		var baseName = task.name;// || '(anon)';
 		var baseId = 0;
 		var name;
 		while (Task.names.indexOf(
-			name = `baseName.${baseId.toString().padStart(length)}`
+			name = `${baseName}.${baseId.toString().padStart(length)}`
 		) >= 0) {
 			baseId++;
 		}
@@ -53,7 +53,7 @@ Object.defineProperty(Task, 'all', { enumerable: true, get: function Task_getAll
 
 Task.prototype.fn;
 Object.defineProperty(Task.prototype, 'name', { enumerable: true, get: function task_getName() {
-	return this.fn && this.fn.name || '(anon)';
+	return this.fn && this.fn.name ? this.fn.name : '(anon)';
 } });
 
 Task.prototype._promise;
@@ -88,7 +88,7 @@ Object.defineProperty(Task.prototype, 'isActive', { enumerable: true, get: funct
 } });
 
 Task.prototype.run = async function task_run(...args) {
-	const namespace = createNamespace()
+	const namespace = createNamespace(this.name)
 	console.verbose(`Running task '${this.name}' with args=${inspect(args)}, namespace=${inspect(namespace)} ... `);	
 	this._promise = this.fn(...args)
 	.then(r => { console.verbose(`Completed task '${this.name}': r=${inspect(r)}`); return r; })
