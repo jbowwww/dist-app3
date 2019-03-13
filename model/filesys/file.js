@@ -7,7 +7,7 @@ const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
-const FsEntry = mongoose.model('fs'); require('./filesys-entry.js');
+const FsEntry = mongoose.model('fs'); //require('./filesys-entry.js');
 
 let file = new mongoose.Schema({
 	hash: { type: String, /*default: '',*/ required: false },

@@ -61,7 +61,7 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await app.dbConnect();
 		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
+		// await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
 		
 		// await pMap(searches, async search =>
 		// 	Task(async function fsSearch(task) {
@@ -73,32 +73,37 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// 		}
 		// 	}).run());
 
-		await new Task(async function hashFiles(task) {
-			async function showHashTotals() {
-				var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
-				var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
-				var totalFileCount = hashedFileCount + unhashedFileCount;
-				console.log(`Counted ${totalFileCount} files... ${hashedFileCount} hashed and ${unhashedFileCount} not`);
-			};
-			await showHashTotals();
+		// await new Task(async function hashFiles(task) {
+		// 	async function showHashTotals() {
+		// 		var hashedFileCount = await File.find({ hash: { $exists: true } }).countDocuments();
+		// 		var unhashedFileCount = await File.find({ hash: { $exists: false } }).countDocuments();
+		// 		var totalFileCount = hashedFileCount + unhashedFileCount;
+		// 		console.log(`Counted ${totalFileCount} files... ${hashedFileCount} hashed and ${unhashedFileCount} not`);
+		// 	};
+		// 	await showHashTotals();
+		// 	var hashCount = 0;
+		// 	for await (let f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).cursor()) {	//q.cursor())
+		// 		hashCount++;
+		// 		try {
+		// 			await f.doHash();
+		// 			await f.bulkSave();
+		// 		} catch (e) {
+		// 			console.warn(`error hashing for f.path='${f.path}': ${e.stack||e}`);
+		// 		} finally {
+		// 			// console.verbose(`task=${inspect(task)}`);
+		// 		}
+		// 	}
+		// 	console.log(`Done Hashing ${hashCount} files...`);
+		// 	await showHashTotals();
+		// }).run();
 
-			var hashCount = 0;
-			for await (let f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).cursor()) {	//q.cursor())
-				hashCount++;
-				try {
-					await f.doHash();
-					await f.bulkSave();
-				} catch (e) {
-					console.warn(`error hashing for f.path='${f.path}': ${e.stack||e}`);
-				} finally {
-					// console.verbose(`task=${inspect(task)}`);
-				}
-			}
-
-			console.log(`Done Hashing ${hashCount} files...`);
-			await showHashTotals();
-
-		}).run();
+		// TODO: Get this one working again
+		new Task(async function() {
+		for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
+			await pipelines.doAudio(f);
+			await pipelines.bulkSave(f);
+		}
+	})
 
 	} catch (err) {
 
@@ -117,19 +122,12 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 // 	})
 // })
 
-// .then(async function() {
-// 	for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
-// 		await pipelines.doAudio(f);
-// 		await pipelines.bulkSave(f);
-// 	}
-// })
-
 // .then(() => { console.verbose(
 // 	`mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
 // 	`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
 // 	(errors.length > 0 ? `global errors (${errors.length}): ${inspect(errors)}\n` : '') ); })
 
-// .then(() => mongoose.connection.close()
+// .then(() => mongoose.connecxtion.close()
 // 	.then(() => { console.log(`mongoose.connection closed`); })
 // 	.catch(err => { console.error(`Error closing mongoose.connection: ${err.stack||err}`); }))
 
