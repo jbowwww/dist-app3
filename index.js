@@ -25,7 +25,7 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 0 }
+	{ path: '/mnt/media', maxDepth: 2 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -63,15 +63,15 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 
 		// await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
 		
-		// await pMap(searches, async search =>
-		// 	Task(async function fsSearch(task) {
-		// 		for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-		// 			f = await FsEntry.findOrCreate(f); 
-		// 			console.debug(`f.path: '${f.path}'`);
-		// 			await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-		// 			// console.verbose(`task=${inspect(task)}`);
-		// 		}
-		// 	}).run());
+		await pMap(searches, async search =>
+			Task(async function fsSearch(task) {
+				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
+					f = await FsEntry.findOrCreate(f); 
+					console.debug(`f.path: '${f.path}'`);
+					await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+					// console.verbose(`task=${inspect(task)}`);
+				}
+			}).run());
 
 		// await new Task(async function hashFiles(task) {
 		// 	async function showHashTotals() {
@@ -98,12 +98,12 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// }).run();
 
 		// TODO: Get this one working again
-		new Task(async function() {
-		for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
-			await pipelines.doAudio(f);
-			await pipelines.bulkSave(f);
-		}
-	})
+		new Task(async function doAudio() {
+			for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
+				await pipelines.doAudio(f);
+				await pipelines.bulkSave(f);
+			}
+		}).run();
 
 	} catch (err) {
 

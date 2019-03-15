@@ -5,6 +5,7 @@ const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0
 const _ = require('lodash');
 const fs = require('fs');
 const mongoose = require('mongoose');
+const Task = require('./Task.js');
 
 var app = {
 
@@ -72,7 +73,8 @@ var app = {
 
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
-			`fsIterate: models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}`);
+			`models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
+			`Tasks.all: ${inspect(Task.all, { depth: 5 } )}`);
 		app.logErrors();
 	},
 	logErrors() {

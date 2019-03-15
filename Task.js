@@ -10,6 +10,12 @@ const defaultTaskOptions = {
 	nameIdLength: 1
 };
 
+// think you've got a few different approaches mixed together here... 
+// i *think* .. :
+// 1. you use AsyncResource class to create a nwe async resource type that defines when to call 
+// init (in ctor), before, after (both anywhere in the class's methods) and destroy(anywhere in class, often in close())
+// 2. async_hooks.createHook({init,before,after,destroy}).enable() to handle the init,before,after,destroy events created by resources (builtin and custom)
+
 // [new ]Task([options, ], fn)
 function Task(options, fn) {
 	if (arguments.length === 1) {
@@ -21,28 +27,29 @@ function Task(options, fn) {
 	Object.defineProperty(this, 'rootAsyncId', { enumerable: true, value: asyncHooks.executionAsyncId() });
 	Object.defineProperty(this, 'fn', { enumerable: true, value: fn });
 	Object.defineProperty(this, 'options', { enumerable: true, value: _.defaults(options, defaultTaskOptions) });
-	Object.defineProperty(this, 'id', { enumerable: true, value: Task.generateUniqueTaskId(this.name, this.options.nameIdLength) });
+	Object.defineProperty(this, 'id', { enumerable: true, value: this.name + ':' + this.rootAsyncId }); //this.generateUniqueTaskId()
 	this.namespace = createNamespace(this.id);
 	console.debug(`${inspect(this)}`);
 }
 
 Object.defineProperty(Task, 'defaultOptions', { enumerable: true, value: defaultTaskOptions });
 Object.defineProperty(Task, 'names', { enumerable: true, value: [] });
-Object.defineProperty(Task, 'generateUniqueTaskId', {
+/*Object.defineProperty(Task.prototype, 'generateUniqueTaskId', {
 	enumerable: true,
-	value: function Task_generateUniqueTaskId(task, length = 1) {
-		var baseName = task.name;// || '(anon)';
-		var baseId = 0;
+	value: function Task_generateUniqueTaskId() {
+		var baseName = this.name;// || '(anon)';
 		var name;
-		while (Task.names.indexOf(
-			name = `${baseName}.${baseId.toString().padStart(length)}`
-		) >= 0) {
-			baseId++;
+		const maxId = 10 ** (this.options.nameIdLength - 1);
+		for (var baseId = 0; baseId < maxId; baseId++) {
+			name = `${baseName}.${baseId.toString().padStart(this.options.nameIdLength)}`;
+			if (Task.names.indexOf(name) < 0) {
+				Task.names.push(name);
+				return name;
+			}
 		}
-		Task.names.push(name);
-		return name; 
+		throw new Error(`[Task name=${this.name}].generateUniqueTaskId() (this.options.nameIdLength=${this.options.pnameIdLength}): No ID's left`); 
 	}
-});
+});*/
 
 Object.defineProperty(Task, 'created', { enumerable: true, value: [] });;
 Object.defineProperty(Task, 'running', { enumerable: true, value: [] });;
@@ -53,7 +60,7 @@ Object.defineProperty(Task, 'all', { enumerable: true, get: function Task_getAll
 
 Task.prototype.fn;
 Object.defineProperty(Task.prototype, 'name', { enumerable: true, get: function task_getName() {
-	return this.fn && this.fn.name ? this.fn.name : '(anon)';
+	return (this.fn && this.fn.name) ? this.fn.name : '(anon)';
 } });
 
 Task.prototype._promise;
@@ -88,11 +95,19 @@ Object.defineProperty(Task.prototype, 'isActive', { enumerable: true, get: funct
 } });
 
 Task.prototype.run = async function task_run(...args) {
-	const namespace = createNamespace(this.name)
-	console.verbose(`Running task '${this.name}' with args=${inspect(args)}, namespace=${inspect(namespace)} ... `);	
-	this._promise = this.fn(...args)
-	.then(r => { console.verbose(`Completed task '${this.name}': r=${inspect(r)}`); return r; })
-	.catch(e => { console.error(`Error in task '${this.name}': ${e.stack||e}`); })
+	// const namespace = createNamespace(this.name)
+	this.runAsyncId = asyncHooks.executionAsyncId();
+	console.verbose(`Running task '${this.name}' with args=${inspect(args)}, this.namespace=${inspect(this.namespace)} ... `);	
+	this._promise = this.namespace.run( (...args) => {
+		var callStack = this.namespace.get('callStack');
+		if (!callStack) {
+			callStack = this.namespace.set('callStack', []);
+		}
+		callStack.push(this.fn.name||'(anon)');
+		return this.fn(...args);
+	}, ...args)// this.fn(...args)
+	// .then(r => { console.verbose(`Completed task '${this.name}': r=${inspect(r)}`); return r; })
+	// .catch(e => { console.error(`Error in task '${this.name}': ${e.stack||e}`); })
 	.finally(() => {
 		_.pull(Task.running, this);
 		Task.finished.push(this);
