@@ -2,13 +2,12 @@
 "use strict";
 const console = require('./stdio.js').Get('Task', { minLevel: 'debug' }); // debug verbose log
 const util = require('util');
-const inspect = require('./utility.js').makeInspect({ depth: 3, getters: true, colors: true, /*breakLength: 0,*/ compact: false });
+const inspect = require('./utility.js').makeInspect({ depth: 3, getters: true, /*colors: true,*/ /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const fs = require('fs');
 const asyncHooks = require('async_hooks');
 
-// can these be created directly in the class?
-const _contexts = {};
+const _contexts = [];
 const _uniqueContexts = [];
 const _created = [];
 const _running = [];
@@ -38,16 +37,21 @@ class Task extends asyncHooks.AsyncResource {
     this.options = options;
     this.asyncId = asyncHooks.executionAsyncId();
     this.triggerAsyncId = asyncHooks.triggerAsyncId();
-    if (_.includes(_.keys(_contexts), this.triggerAsyncId)) {
-      this.context =  _contexts[this.triggerAsyncId];
+    if (!!Task.contexts[this.triggerAsyncId]) {
+      this.context =  Task.contexts[this.triggerAsyncId];
+      this.context.stack.push(this);
+      // TODO: Convert stdio.js to use fs.writeSync (optionally or permanently?) so can use it here and get standard formatted logging
       fs.writeSync(1, `new Task(${options}, ${fn.name||'(anon)'}): asyncId=${this.asyncId} triggerAsyncId=${this.triggerAsyncId} with parent context=${inspect(this.context)}`);
     } else {
-      this.context = {};
-      this.context.rootTask = this;
-      _contexts[this.asyncId] = this.context;
-      uniqueContexts.push(this.context);
+      this.context = {
+        get rootTask() { return this.context.stack[0]; },
+        stack: [ this ],
+        get stackNames() { return this.context.stack.map(task => task.name); }
+      };
+      Task.uniqueContexts.push(this.context);
       fs.writeSync(1, `new Task(${options}, ${fn.name||'(anon)'}): asyncId=${this.asyncId} triggerAsyncId=${this.triggerAsyncId} with NEW context=${inspect(this.context)}`);
     }
+    Task.contexts[this.asyncId] = this.context;
     Task.created.push(this);
   }
 
@@ -60,8 +64,8 @@ class Task extends asyncHooks.AsyncResource {
     _.pull(Task.created, this);
     this._promise = this.fn(...args)
     .finally(() => {
-            _.pull(Task.running, this);
-            Task.finished.push(this);
+      _.pull(Task.running, this);
+      Task.finished.push(this);
     });
     _.pull(Task.created, this);
     Task.running.push(this);
@@ -92,11 +96,12 @@ class Task extends asyncHooks.AsyncResource {
 const asyncHook = asyncHooks.createHook({ init, before, after, destroy, promiseResolve }).enable(); // asyncHook.disable();
 
 function init(asyncId, type, triggerAsyncId, resource) {  // resource may not have completed construction when this callback runs, therefore don't expect all fields populated (although doesn't appear to be the actual Task instance either?)
-  if (Task.contexts[triggerAsyncId]) {
+  // necessary to keep track of context across async resources, as tasks will rarely directly trigger another task (or so it seems) 
+  if (!!Task.contexts[triggerAsyncId]) {
     Task.contexts[asyncId] = Task.contexts[triggerAsyncId];
-    fs.writeSync(1, `init: asyncId=${asyncId} triggerAsyncId=${triggerAsyncId}\n`)
+    // fs.writeSync(1, `init: asyncId=${asyncId} triggerAsyncId=${triggerAsyncId} task.fn=${Task.contexts[asyncId].rootTask.fn.name}\n`)
   } else {
-    fs.writeSync(1, `init: asyncId=${asyncId} triggerAsyncId=${triggerAsyncId} NO CONTEXT FOUND\n`)
+    // fs.writeSync(1, `init: asyncId=${asyncId} triggerAsyncId=${triggerAsyncId} NO CONTEXT FOUND\n`)
   }
 }
 function before(asyncId) { }

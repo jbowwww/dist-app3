@@ -66,11 +66,11 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await pMap(searches, async search =>
 			new Task(async function fsSearch(task) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-					// await new Task(async function fSEntry(/*f*/) {
+					await new Task(async function fSEntry(/*f*/) {
 						f = await FsEntry.findOrCreate(f); 
 						console.debug(`f.path: '${f.path}'`);
 						await (f.fileType === 'dir' ? f.save() : f.bulkSave());
-					// }).run();
+					}).run();
 					// console.verbose(`task=${inspect(task)}`);
 				}
 			}).run());

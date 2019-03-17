@@ -74,7 +74,7 @@ var app = {
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
 			`models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
-			`Tasks.all (${Task.all.length}): ${inspect(Task.all, { depth: 5 } )} Tasks.uniqueContexts (${Task.uniqueContexts.length})=${inspect(Task.uniqueContexts)}`);
+			`Tasks.all (${Task.all.length}): ${inspect(Task.all, { depth: 3, compact: true } )} Tasks.uniqueContexts (${Task.uniqueContexts.length})=${inspect(Task.uniqueContexts, { depth: 3, compact: true })}`);
 		app.logErrors();
 	},
 	logErrors() {
