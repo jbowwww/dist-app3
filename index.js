@@ -25,7 +25,7 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 2 }
+	{ path: '/mnt/media', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -64,11 +64,13 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
 		
 		await pMap(searches, async search =>
-			Task(async function fsSearch(task) {
+			new Task(async function fsSearch(task) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-					f = await FsEntry.findOrCreate(f); 
-					console.debug(`f.path: '${f.path}'`);
-					await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+					// await new Task(async function fSEntry(/*f*/) {
+						f = await FsEntry.findOrCreate(f); 
+						console.debug(`f.path: '${f.path}'`);
+						await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+					// }).run();
 					// console.verbose(`task=${inspect(task)}`);
 				}
 			}).run());
@@ -98,9 +100,9 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// }).run();
 
 		// TODO: Get this one working again
-		new Task(async function doAudio() {
-			for await (const f of File.find({ hash: { $exists: false } }).cursor()) {
-				await pipelines.doAudio(f);
+		new Task(async function doAudio(task) {
+			for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).cursor()) {
+				await pipelines.doAudio(await f.getArtefact());
 				await pipelines.bulkSave(f);
 			}
 		}).run();
