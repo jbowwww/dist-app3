@@ -1,7 +1,7 @@
 
 "use strict";
 const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
-const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
+const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: true });
 const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
