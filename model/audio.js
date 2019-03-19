@@ -1,7 +1,7 @@
 "use strict";
-var console = require('../stdio.js').Get('modules/audio', { minLevel: 'verbose' });	// debug verbose
-const inspect =	require('../utility.js').makeInspect({ depth: 1, compact: true });
-const inspectPretty = require('../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
+var console = require('../stdio.js').Get('modules/audio', { minLevel: 'debug' });	// debug verbose
+const inspect =	require('../utility.js').makeInspect({ depth: 5, compact: true });
+const inspectPretty = require('../utility.js').makeInspect({ depth: 5, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
 const mongoose = require('mongoose');
@@ -34,6 +34,7 @@ var commonSchema = new mongoose.Schema({
     encodedBy: String,
     encodersettings: String,
     title: String,
+    album: String,
     artist: String,
     artists: [String],
     genre: [String],
@@ -47,7 +48,7 @@ var nativeSchema = new mongoose.Schema({
 var audioSchema = new mongoose.Schema({
     format: formatSchema,
     common: commonSchema,
-    native: nativeSchema
+    native: mongoose.SchemaTypes.Mixed // nativeSchema
 });
 
 // audioSchema.virtual('file').set(function(file) {
@@ -63,7 +64,7 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
     var audio = this;
     var model = this.constructor;
     console.debug(`audio=${inspectPretty(audio)} file=${inspectPretty(file)}`);
-    return mm.parseFile(file.path).then(metadata => {
+    return mm.parseFile(file.path, { native: true }).then(metadata => {
         console.debug(`metadata=${inspectPretty(metadata)}`);
         audio.updateDocument(metadata);//metadata = metadata;
         return audio;
@@ -71,7 +72,7 @@ audioSchema.method('loadMetadata', function loadMetadata(file) {
         var e = new Error( `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`);
         e.stack = err.stack;
         console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
-        model._stats.errors.push(e);
+        model._stats.loadMetadata.errors.push(e);
         return audio;
         // throw e;
     });

@@ -153,7 +153,12 @@ PromisePipe.prototype = {
 			// }			
 		};
 		return this._run;
-	},
+	}
+};
+
+PromisePipe.prototype.constructor = PromisePipe;
+
+_.assign(PromisePipe, {
 
 	tap(fn) { 	// a thenable function for tapping the promise value tpo call a function, but returning the original value   
 		return (v => Q(fn(v)).then(() => v));
@@ -178,8 +183,6 @@ PromisePipe.prototype = {
 			});
 	}
 
-};
-
-PromisePipe.prototype.constructor = PromisePipe;
+});
 
 module.exports = PromisePipe;

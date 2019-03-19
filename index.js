@@ -64,7 +64,7 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
 		
 		await pMap(searches, async search =>
-			new Task(async function fsSearch(task) {
+			await new Task(async function fsSearch(task) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
 					await new Task(async function fSEntry(/*f*/) {
 						f = await FsEntry.findOrCreate(f); 
@@ -100,13 +100,25 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// }).run();
 
 		// TODO: Get this one working again
-		new Task(async function doAudio(task) {
+		await new Task(async function doAudio(task) {
 			for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).cursor()) {
-				await pipelines.doAudio(await f.getArtefact());
-				await pipelines.bulkSave(f);
+				const a = await f.getArtefact();
+				if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
+					if (!a.audio) {
+						await a.addMetaData('audio', {});
+					}
+					// if (!a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+						await a.audio.loadMetadata(a.file);
+					// }
+				}
+				await a.bulkSave();
 			}
 		}).run();
 
+		// iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
+		// 	iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
+		// 	iff( a => !a.audio.isCheckedSince(a.file._ts.updatedAt), a => a.audio.loadMetadata(a.file) ) )
+	
 	} catch (err) {
 
 		console.error(`main() error: ${err.stack||err}`);

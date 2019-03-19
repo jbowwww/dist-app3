@@ -8,6 +8,8 @@ Q.longStackSupport = true;
 const mongoose = require('mongoose');
 const { /*promisePipe,*/ artefactDataPipe, chainPromiseFuncs, iff, tap } = require('../../promise-pipe.js');
 
+console.verbose(`artefact.js tap: ${tap} iff: ${iff}`);
+
 /* Standard/common schema methods, statics
  */
 module.exports = function artefactSchemaPlugin(schema, options) {

@@ -116,6 +116,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		});
 	});
 
+	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
+		if (!_.isDate(timestamp)) {
+			throw new TypeError(`isCheckedSince: timestamp must be a Date`);
+		}
+		return !this.isNew && this._ts.checkedAt > timestamp;
+	});
+
 	/* Updates an (in memory, not DB) document with values in the update parameter,
 	 * but only marks paths as modified if the (deep-equal) value actually changed
 	 * I think mongoose is supposed to be able to doc.set() and only mark paths and subpaths that have actually changed, 
