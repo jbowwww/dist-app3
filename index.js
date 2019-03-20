@@ -67,7 +67,7 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 			await new Task(async function fsSearch(task) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
 					await new Task(async function fSEntry(/*f*/) {
-						f = await FsEntry.findOrCreate(f); 
+						f = await FsEntry.findOrCreate(f); 	// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
 						console.debug(`f.path: '${f.path}'`);
 						await (f.fileType === 'dir' ? f.save() : f.bulkSave());
 					}).run();
@@ -101,7 +101,7 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 
 		// TODO: Get this one working again
 		await new Task(async function doAudio(task) {
-			for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).cursor()) {
+			for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).batchSize(5).cursor()) {
 				const a = await f.getArtefact();
 				if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
 					if (!a.audio) {

@@ -1,3 +1,32 @@
+190320
+
+Check stats counting on bulkSave, see below 2x as many calls as validate
+
+190220:082227.771 31251 app [V] mongoose.models count=6 names=partition, fs, dir, file, disk, audio
+models[]._stats: {
+  partition: {},
+  fs: {
+    findOrCreate: { calls: 59, success: 59, failed: 0, total: 0, create: 0, update: 0, check: 0 }
+  },
+  dir: {
+    validate: { calls: 27, success: 27, failed: 0, total: 0, create: 0, update: 0, check: 27 },
+    save: { calls: 27, success: 27, failed: 0, total: 0, create: 0, update: 0, check: 27 }
+  },
+  file: {
+    validate: { calls: 1347, success: 1347, failed: 0, total: 0, create: 0, update: 229, check: 1118 },
+    bulkSave: { calls: 1347, success: 1347, failed: 0, total: 0, create: 0, update: 229, check: 1118 }
+  },
+  disk: {},
+  audio: {
+    validate: { calls: 673, success: 673, failed: 0, total: 0, create: 673, update: 0, check: 0 },
+    bulkSave: { calls: 1346, success: 1346, failed: 0, total: 0, create: 1346, update: 0, check: 0 }
+  }
+}
+
+190220:082227.772 31251 app [V] dbClose: Closing db 'mongodb://localhost:27017/ArtefactsJS' ...
+190220:082227.773 31251 app [I] dbClose: db closed 'mongodb://localhost:27017/ArtefactsJS'
+190220:082227.773 31251 app [I] Exiting  (exitCode=0) ...
+
 190226
 
 https://github.com/guyguyon/node-request-context

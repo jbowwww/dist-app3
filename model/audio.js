@@ -1,5 +1,5 @@
 "use strict";
-var console = require('../stdio.js').Get('modules/audio', { minLevel: 'debug' });	// debug verbose
+var console = require('../stdio.js').Get('modules/audio', { minLevel: 'verbose' });	// debug verbose
 const inspect =	require('../utility.js').makeInspect({ depth: 5, compact: true });
 const inspectPretty = require('../utility.js').makeInspect({ depth: 5, compact: false /* true */ });
 const _ = require('lodash');
