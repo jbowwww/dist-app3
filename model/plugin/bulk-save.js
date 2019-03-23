@@ -1,11 +1,12 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/bulk-save', { minLevel: 'verbose' });	// log verbose debug
 const util = require('util');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
 Q.longStackSupport = true;
 const mongoose = require('mongoose');
+mongoose.set('debug', true);
 mongoose.Promise = Q.Promise;
 
 /* 190219: TODO: modify this implementation to act more analogous to Model.save() -
@@ -16,7 +17,7 @@ mongoose.Promise = Q.Promise;
  */
 
 module.exports = function bulkSaveSchemaPlugin(schema, options) {
-	schema.plugin(require('./stat.js'), [ 'bulkSave' ]);
+	// schema.plugin(require('./stat.js'), [ 'bulkSave' ]);
 
 	/* 181222: Note: Don't use bulkSave (at least currently) in a promisePipe unless it is at the END or at the END of a tap chain
 	 * Because currently it returns a bulkwriteopresult and not the document (unless the doc is unmodified requiring no save, then it returns a doc
@@ -30,12 +31,16 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 
 		options = _.assign({
 			maxBatchSize: 10,
-			batchTimeout: 750
+			batchTimeout: 750,
+			query: undefined
 		}, options);
 
-		return doc.validate().then(() => {
-				console.verbose(`[model ${model.modelName}].bulkSave isNew=${doc.isNew} isModified()=${doc.isModified()} modifiedPaths=${doc.modifiedPaths()}`);// model._bulkSaveDeferred.promise.state=${model._bulkSaveDeferred?model._bulkSaveDeferred.promise.state:'(undefined)'}`);	// action=${actionType}
-				
+		console.verbose(`[model ${model.modelName}].bulkSave isNew=${doc.isNew} isModified()=${doc.isModified()} modifiedPaths=${doc.modifiedPaths()}`);// model._bulkSaveDeferred.promise.state=${model._bulkSaveDeferred?model._bulkSaveDeferred.promise.state:'(undefined)'}`);	// action=${actionType}
+		
+		return (!(doc.isNew || doc.isModified())) ?
+			Q(doc)
+		 : 	doc.validate().then(() => {
+
 				if (!model._bulkSave) {
 					model._bulkSave = [];
 				} else if (model._bulkSave.indexOf(doc) >= 0) {
@@ -45,7 +50,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 				var deferred = Q.defer();
 				model._bulkSave.push({ doc, deferred, opIndex: model._bulkSave.length });
 				if (model._bulkSave.length >= options.maxBatchSize) {
-					innerBulkSave();
+					process.nextTick(() => innerBulkSave());
 				} else if (!model._bulkSaveTimeout) {
 					model._bulkSaveTimeout = setTimeout(() => innerBulkSave(), options.batchTimeout);
 				} 
@@ -60,8 +65,25 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 						clearTimeout(model._bulkSaveTimeout);
 						delete model._bulkSaveTimeout;
 					}
-
-					var bulkOps = _.map(bs, bsDoc => ({ updateOne: { filter: { _id: bsDoc.doc._doc._id }, update: { $set: bsDoc.doc._doc }, upsert: true } }));
+				
+					var bulkOps = _.map(bs, bsDoc => {
+						var data = bsDoc.doc;
+						if (!options.query) {
+							options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : {});//_.clone(data))
+						}
+						if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string')) {
+							options.query = _.pick(data, options.query);	
+						} else if (_.isObject(options.query)) {
+							options.query = _.mapValues(schema.get('defaultFindQuery'), (v, k) => v === undefined ? data[k] : v);
+						}
+						return ({
+							updateOne: {
+								filter: { _id: data._doc._id },
+								update: { $set: data._doc },
+								upsert: true
+							}
+						});
+					});
 					console.debug(`[model ${model.modelName}].innerBulkSave( [${bulkOps.length}] = ${inspect(bulkOps, { depth: 5, compact: true })} )`);
 
 					// 190112: TODO: Need to separate results for each individual doc and handle accordingly.

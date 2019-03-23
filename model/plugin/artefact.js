@@ -30,10 +30,10 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 		var doc = this;
 		var dk = schema.get('discriminatorKey');
 		// var oldModel = this.constructor;
-		var model = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
-		var modelName = model.modelName;
+		var docModel = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
+		var docModelName = docModel.modelName;
 		doc._primary = doc;
-		doc._primaryType = modelName;
+		doc._primaryType = docModelName;
 
 		function doMetaPipe(meta, promisePipe) {
 			if (!promisePipe) {
@@ -65,8 +65,10 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 					batchTimeout: 750
 				}, opts);
 				console.debug(`Artefact.save(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
-				return Q.all(
-					_.map(this, (data, dataName) => data.save(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts))
+				return this[docModelName].save(opts.meta ? opts.meta[docModelName] : opts)
+				.all(
+					_.map(this, (data, dataName) => (dataName === docModelName ? Q(data)
+					 : data.save(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts)))
 				)
 				.then(() => this);
 			},
@@ -76,51 +78,60 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 					maxBatchSize: 10,
 					batchTimeout: 750
 				}, opts);
-				console.debug(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
-				return Q.all(
-					_.map(this, (data, dataName) => data.bulkSave(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts))
+				console.verbose(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
+				return this[docModelName].save(opts.meta ? opts.meta[docModelName] : opts)
+				.all(
+					_.map(this, (data, dataName) => (dataName === docModelName ? Q(data)
+					 : data.bulkSave(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts)))
 				)
 				.then(() => this);
 			},
 
 			addMetaData(modelName, data, promisePipe) {
 				if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
-				console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
+				console.debug(`addMetaData('${modelName}'): docModelName=${docModelName} this(artefact)=${inspect(this, { compact: false })}`);
 				if (this[modelName]) {
-					console.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
+					console.debug(`addMetaData('${modelName}'): docModelName=${docModelName}: meta exists: ${inspect(this[modelName], { compact: false })}`);
 					return Q(this);
 				} else {
 					var model = mongoose.model(modelName);
 					if (!model) throw new Error(`model '${modelName}' does not exist`);
-					return model.construct(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: modelName }, data))
+					return model.construct(_.assign({ /*_artefact: a,*/ _primary: doc._id, _primaryType: docModelName }, data))
 					.then(meta => doMetaPipe(meta, promisePipe))
-					.tap(meta => console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, meta=${inspect(meta, { compact: false })}`))
+					.tap(meta => console.debug(`addMetaData('${modelName}: docModelName=${docModelName} this(artefact)=${inspect(this, { compact: false })}, meta=${inspect(meta, { compact: false })}`))
 					.then(meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta }));
 				}
 			},
 
 			addOrFindMetaData(modelName, data, promisePipe) {
 				var model = mongoose.model(modelName);
-				return model.findOrCreate(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: modelName }, data))
+				return model.findOrCreate(_.assign({ /*_artefact: a,*/ _primary: doc._id, _primaryType: docModelName }, data))
 				.then(meta => doMetaPipe(meta, promisePipe))
-				.tap(meta => console.debug(`getArtefact: modelName=${modelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}, promisePipe: ${promisePipe?'yes':'no'}`))
+				.tap(meta => console.debug(`artefact.addOrFindMetaData: docModelName=${docModelName} modelName='${modelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}, promisePipe: ${promisePipe?'yes':'no'}`))
 				.then(meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta }));
 			},
 
 			findMetaData(modelName, promisePipe) {
 				var model = mongoose.model(modelName);
-				return model.findOne({ _primary: doc, _primaryType: modelName })
+				return model.findOne({ _primary: doc._id, _primaryType: docModelName })
+				// .then(meta => {
+				// 	console.verbose(`artefact.findMetaData('${modelName}'): docModelName=${docModelName} model=${model.count()} meta=${!meta?'(null)':meta} this(a)=${inspect(this, { compact: false })}`);
+				// 	return meta;
+				// })
 				.then(meta => iff(meta, 
 					meta => doMetaPipe(meta, promisePipe),
-					tap(meta => console.debug(`getArtefact: modelName=${modelName} modelName='${modelName}': model=${model.count()} meta=${!meta?'(null)':inspect(meta, { compact: false })}`)),
-					meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta })));
+					meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, value: meta })),
+					meta => {
+						console.verbose(`artefact.findMetaData('${modelName}'): docModelName=${docModelName} model=${model.count()} meta=${!meta?'(null)':meta} this(a)=${inspect(this, { compact: false })}`);
+						return meta;
+					});
 			}
 
 		}, {
 			// _primaryDataType: { enumerable: true, value: modelName },
 			// _primaryDataId: doc._id,
-			[model.baseModelName]: { writeable: true, enumerable: false, value: doc }, 
-			[modelName]: { writeable: true, enumerable: true, value: doc }
+			[docModel.baseModelName]: { writeable: true, enumerable: false, value: doc }, 
+			[docModelName]: { writeable: true, enumerable: true, value: doc }
 			// [util.inspect.custom](depth, options): { return }
 		});
 		// doc._artefact = a;
@@ -128,13 +139,13 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 		var allModels = options.meta ? _.keys(options.meta) :
 			_.filter(mongoose.modelNames(), modelName => {
 				var m = mongoose.model(modelName);
-				return m.discriminators === undefined && model.baseModelName != m.baseModelName && model.modelName != m.baseModelName && model.baseModelName != m.modelName;
+				return m.discriminators === undefined && docModel.baseModelName != m.baseModelName && docModel.modelName != m.baseModelName && docModel.baseModelName != m.modelName;
 			});
 		
-		console.debug(`[model ${modelName}(dk=${dk})].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);
+		console.debug(`[model ${docModelName}(dk=${dk})].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 3, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);
 
 		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
-		.then(() => { console.debug(`getArtefact: modelName=${modelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
+		.then(() => { console.debug(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })
 		.then(() => Q(a));	
 	});
 

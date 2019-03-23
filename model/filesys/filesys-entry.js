@@ -82,7 +82,7 @@ fsEntry.post('construct', function doCreate(doc, next) {
 			_.filter( partitions, partition => typeof partition.mountpoint === 'string'),
 			partition => partition.mountpoint.length)),
 			partition => doc.path.startsWith(partition.mountpoint)))
-		.then(partition => _.assign(doc, { partition: partition._id }))))
+		.then(partition => partition ? _.assign(doc, { partition: partition._id }) : doc)))
 
 	.tap(() => console.debug(`[model ${model.modelName}].post('construct'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh})\ndisks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)}`))
 	.finally(() => { doCreateLevel--; });

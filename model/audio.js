@@ -6,6 +6,7 @@ const _ = require('lodash');
 const Q = require('q');
 const mongoose = require('mongoose');
 const mm = require('music-metadata');
+const File = require('./filesys/file.js');
 
 var formatSchema = new mongoose.Schema({
     tagTypes: [String],
@@ -46,6 +47,7 @@ var nativeSchema = new mongoose.Schema({
 });
 
 var audioSchema = new mongoose.Schema({
+    file: { type: mongoose.SchemaTypes.ObjectId, ref: 'file', required: true },
     format: formatSchema,
     common: commonSchema,
     native: mongoose.SchemaTypes.Mixed // nativeSchema
@@ -59,6 +61,11 @@ var audioSchema = new mongoose.Schema({
 audioSchema.plugin(require('./plugin/standard.js'));
 audioSchema.plugin(require('./plugin/bulk-save.js'));
 audioSchema.plugin(require('./plugin/artefact.js'));
+
+audioSchema.post('construct', function audioPostConstruct(audio) {
+    console.debug(`audio.post('construct'): audio=${inspect(audio, { compact: false })}`);
+    return audio.loadMetadata(audio.file);
+});
 
 audioSchema.method('loadMetadata', function loadMetadata(file) {
     var audio = this;

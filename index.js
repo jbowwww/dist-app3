@@ -25,7 +25,7 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 1 }
+	{ path: '/mnt/media', maxDepth: 0 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -61,19 +61,24 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await app.dbConnect();
 		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		// await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
+		await app.run(() => Disk.findOrPopulate());
 		
+		// This is the syntax I'm aiming for Task.* alloc()'s new Tasks and .run()s them
 		await pMap(searches, async search =>
-			await new Task(async function fsSearch(task) {
-				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-					await new Task(async function fSEntry(/*f*/) {
-						f = await FsEntry.findOrCreate(f); 	// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
-						console.debug(`f.path: '${f.path}'`);
-						await (f.fileType === 'dir' ? f.save() : f.bulkSave());
+			await /*app.run(*/new Task( async function fsSearch() {
+				for await (let f of fsIterate(search)) {
+					await /*app.run*/new Task(async function fSEntry () {
+					// task.pipeline(
+						let fse = await FsEntry.findOrCreate(f);			// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
+						console.debug(`fse.path: \'${fse.path}\'`);
+						await fse.save(); 	// TODO: model.save wrapper optionally (via model/schema options) delegates to bulkSave()  //wait (f.fileType === 'dir' ? f.save() : f.bulkSave());
+					// )
 					}).run();
-					// console.verbose(`task=${inspect(task)}`);
 				}
 			}).run());
+						// console.verbose(`task=${inspect(task)}`);
+					// }
+				// }).run();
 
 		// await new Task(async function hashFiles(task) {
 		// 	async function showHashTotals() {
@@ -101,17 +106,22 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 
 		// TODO: Get this one working again
 		await new Task(async function doAudio(task) {
-			for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).batchSize(5).cursor()) {
+			for await (const f of /*task.queryProgress*/(File.find({
+				hash: { $exists: false },
+				path: { $regex: /^.*\.(wav|mp3|mp4|au|flac)$/i }
+			})).batchSize(5).cursor()) {
 				const a = await f.getArtefact();
-				if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
-					if (!a.audio) {
-						await a.addMetaData('audio', {});
-					}
-					// if (!a.audio.isCheckedSince(a.file._ts.updatedAt)) {
-						await a.audio.loadMetadata(a.file);
-					// }
+				if (!a.audio) {
+					await a.addMetaData('audio', { file: f });
 				}
-				await a.bulkSave();
+				// isCheckedSince will only be valid if doc is not new, if new not all _ts values will be set (confirm this statement)
+				if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+					await a.audio.loadMetadata(a.file);
+				}
+				console.verbose(`artefact=${inspect(a)}`);
+				if (a.audio.isNew || a.audio.isModified()) {
+					await a.bulkSave();
+				}
 			}
 		}).run();
 

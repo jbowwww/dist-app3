@@ -9,7 +9,7 @@ const Task = require('./Task.js');
 
 var app = {
 
-	// _namespace: createNamespace('myapp.mynamespace'),
+	// _namespace: createNamespace('myapp.mynamespace')
 
 	db: {},	// { connection: undefined, url: undefined },
 	async dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
@@ -37,8 +37,36 @@ var app = {
 	// Trying to conceive a neat way to track executing tasks(i.e. promises)
 	// would like an easy way to name them without having to verbosely specify them in an object or array or such
 	// perhaps model/document/? methods could be wrapped so that the promises they return automatically getAllResponseHeaders
-	// properties set on them describing the method name, etc, 
+	// properties set on them describing the method name, etc
 	
+	tasks: {
+		created: [],
+		running: [],
+		finished: [],
+		errored: [],
+		get all() { return _.concat(this.created, this.running, this.finished, this.errored); },
+		[Symbol.iterator]() { return this.all[Symbol.iterator](); }
+	},
+
+	async run(fn, ...args) {
+		var task;
+		if (fn instanceof Task) {
+			task = fn;
+		} else {
+			task = new Task(fn, ...args);
+			app.tasks.created.push(task);
+		}
+		console.verbose(`app.run: running task '${task.name}' with args=${inspect(args)}`);
+		// should this maybe be in a process.nextTick() ? and if not there's nbo poiunt using app.tasks.created above
+		_.pull(app.tasks.created, task);
+		app.tasks.running.push(task);
+		var result = await task.run(...args);
+		_.pull(app.tasks.running, task);
+		app.tasks.finished.push(task);
+		console.verbose(`app.run: task '${task.name}' with args=${inspect(args)} returned ${inspect(result)}`);
+		return result;
+	},
+
 	/*
 	Task,
 	tasks: {},

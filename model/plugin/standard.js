@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/standard', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -33,32 +33,33 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		static: [ "findOrCreate", "upsert" ]
 	};
 	schema.plugin(plugins.stat, trackedMethods.instance);
+
 	_.forEach(trackedMethods.instance, function(methodName) {
 		schema.pre(methodName, function(next) {
 			var doc = this instanceof mongoose.Document ? this : null;
-			var model = doc ? doc.constructor : this;
-			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
+			var model = /*doc ?*/ doc.constructor /*: this*/;
+			// discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
 			var eventName = 'pre.' + methodName;
 			if (model) {
-				model.emit(eventName, doc);
 				model._stats[methodName].calls++;
+				model.emit(eventName, doc);
 			}
 			if (doc) {
-				doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 				var actionType = /*doc instanceof mongoose.Document ?*/ doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' /*: 'static'*/;
 				model._stats[methodName][actionType]++;
+				doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
 			}
 			console.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc=${doc._id}  doc._actions=${inspect(doc._actions)}
 			next();
 		});
 		schema.post(methodName, function(res, next) {
 			var doc = this instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
-			var model = doc ? doc.constructor : this;
-			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
+			var model = /*doc ?*/ doc.constructor /*: this*/;
+			// discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
 			var eventName = 'post.' + methodName;
 			if (model) {
-				model.emit(eventName, doc, res);
 				model._stats[methodName].success++;
+				model.emit(eventName, doc, res);
 			}
 			if (doc) {
 				doc.emit(eventName, res);			// i wonder what this gets bound as? in any case shuld be the doc
@@ -71,7 +72,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			var doc = this instanceof mongoose.Document ? this : res instanceof mongoose.Document ? res : null;
 			var model = /*doc ?*/ doc.constructor/* : this*/;
 			// console.log(`[doc ${model.modelName}].post('${methodName}'): #1 doc.path='${doc.path}'`);
-			discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
+			// discriminatorKey && doc && doc[discriminatorKey] && model && model.discriminators && model.discriminators[doc[discriminatorKey]] && (model = model.discriminators[doc[discriminatorKey]]);
+				model._stats[methodName].errors.push(err);
+	
 			console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 
 			// console.log(`[doc ${model.modelName}].post('${methodName}'): #2 doc.path='${doc.path}'`);
@@ -80,7 +83,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			// console.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc._id||doc} res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 			// if (model) {
 			// 	model.emit(eventName, doc, err);
-				model._stats[methodName].errors.push(err);
 			// }
 			// if (doc) {
 				doc.emit(eventName, err);			// i wonder what this gets bound as? in any case shuld be the doc
@@ -93,24 +95,24 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	_.forEach(trackedMethods.static, function(methodName) {
 		schema.pre(methodName, function(/*doc,*/ next) {
 			var model = this;
+			model._stats[methodName].calls++;
 			var eventName = 'pre.' + methodName;
 			model.emit(eventName/*, doc*/);
-			model._stats[methodName].calls++;
 			next();	// something wrong with my implementation of [Model].static? I'm not getting a next() function from findOrCreate, and maybe 
 		});
 		schema.post(methodName, function(res, next) {
 			var model = this;
+			model._stats[methodName].success++;
 			var eventName = 'post.' + methodName;
 			model.emit(eventName, res);
-			model._stats[methodName].success++;
 			console.debug(`[model ${model.modelName}].post('${methodName}'): res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
 		schema.post(methodName, function(err, res, next) {
 			var model = this;
+			model._stats[methodName].errors.push(err);
 			var eventName = 'err.' + methodName;
 			model.emit(eventName, res, err);
-			model._stats[methodName].errors.push(err);
 			console.error(`[model ${model.modelName}].post('${methodName}') ERROR: res=${inspect(res)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err.stack||err}`);
 			return next(err);
 		});
@@ -120,7 +122,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		if (!_.isDate(timestamp)) {
 			throw new TypeError(`isCheckedSince: timestamp must be a Date`);
 		}
-		return !this.isNew && this._ts.checkedAt > timestamp;
+		return !this.isNew && this._ts.checkedAt && (this._ts.checkedAt > timestamp);
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,
@@ -188,7 +190,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		
 		// I don't think the parsing/defaulting logic here is correct
 		if (!options.query) {
-			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
+			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : {});//_.clone(data));
 		}
 		if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string')) {
 			options.query = _.pick(data, options.query);	

@@ -1,27 +1,29 @@
 
 "use strict";
-const console = require('./stdio.js').Get('Task', { minLevel: 'log' }); // debug verbose log
+const console = require('./stdio.js').Get('Task', { minLevel: 'verbose' }); // debug verbose log
 const util = require('util');
 const inspect = require('./utility.js').makeInspect({ depth: 3, getters: true, /*colors: true,*/ /*breakLength: 0,*/ compact: false });
+const app = require('./app.js');
 const _ = require('lodash');
 const fs = require('fs');
 const asyncHooks = require('async_hooks');
 
 const _contexts = [];
 const _uniqueContexts = [];
-const _created = [];
-const _running = [];
-const _finished = [];
+
+// const _created = [];
+// const _running = [];
+// const _finished = [];
 
 class Task extends asyncHooks.AsyncResource {
 
   static get contexts() { return _contexts; }
   static get uniqueContexts() { return _uniqueContexts; }
 
-  static get all() { return _.concat(Task.created, Task.running, Task.finished); }
-  static get created() { return _created; }
-  static get running() { return _running; }
-  static get finished() { return _finished; }
+  // static get all() { return _.concat(Task.created, Task.running, Task.finished); }
+  // static get created() { return _created; }
+  // static get running() { return _running; }
+  // static get finished() { return _finished; }
 
   // new Task([options, ]fn)
   constructor(options, fn) {
@@ -35,7 +37,8 @@ class Task extends asyncHooks.AsyncResource {
     super('Task');
     this.fn = fn;
     this.options = options;
-    Task.created.push(this);
+    this.runArgs = null;
+    // app.tasks.created.push(this);
     console.verbose(1, `new Task(${this.options}, func '${this.name}'): asyncId=${this.asyncId} triggerAsyncId=${this.triggerAsyncId} with context.stack=${inspect(this.context.stack)}`);
   }
 
@@ -43,14 +46,21 @@ class Task extends asyncHooks.AsyncResource {
     return this.fn ? this.fn.name ? this.fn.name : '(anon)' : '(noop)';
   }
 
+  get isRunning() {
+    return this.currentArgs !== null;
+  }
+
   run(...args) {
     console.log(`Running task '${this.name}' with args=${inspect(args)}`);
-    _.pull(Task.created, this);
-    this._promise = this.runInAsyncScope(this.fn, this, ...args)
+    // _.pull(app.tasks.created, this);
+    // app.tasks.running.push(this);
+    this.runArgs = args;
+    this._promise = this.fn(...args) //this.runInAsyncScope(this.fn, this, ...args)
     .catch(err => { console.error(`Task.run '${this.name}' error: ${err.stack||err}`); throw err; })
     .finally(() => {
-      _.pull(Task.running, this);
-      Task.finished.push(this);
+      // _.pull(app.tasks.running, this);
+      this.runArgs = null;
+      // app.tasks.finished.push(this);
       const last = _.last(this.context.stack);
       console.verbose(`after Task '${this.name} asyncId=${this.asyncId} triggerAsyncId=${this.triggerAsyncId}: context.stack=${inspect(this.context.stack)}`);//{name:${last.name}, asyncId:${last.asyncId}, triggerAsyncId:${last.triggerAsyncId}`);
       if (last.asyncId !== this.asyncId) {
@@ -61,6 +71,36 @@ class Task extends asyncHooks.AsyncResource {
       this.emitDestroy();
     });
     return this._promise;
+  }
+
+  async* iterate(...args) {   //iterable, iterateOptions, ...iterate) {
+    const iterable = args.shift()
+    if (!_.isFunction(iterable[Symbol.iterator])) {
+      throw new TypeError(`iterate: argument 1 must be an iterable`);
+    }
+    const options = {};
+    if (_.isPlainObject(args[0])) {
+      options = args.unshift();
+    }
+    /* vv move this functionality of chaining iterate funcs if there are >1 to another func Task.pipeline? */
+    const iterateFuncs = []
+    while (args.length > 0) {
+      if (!_.isFunction(args[0])) {
+        throw new TypeError(`iterate: trailing arguments must be functions`);
+      }
+      iterateFuncs.push(args.unshift());
+    }
+    /* ^^ move this functionality of chaining iterate funcs if there are >1 to another func Task.pipeline? */
+
+    if (typeof iterateOptions === 'function' && !iterate) {
+      iterate = iterateOptions;
+      iterateOptions = {};
+    }
+    this.accum = iterateOptions.initial || null;
+    for await (let data of iterable) {
+      yield (this.accum = await new Task(iterateOptions, iterate).run(data));
+    }
+    return this.accum;
   }
 
   async* queryProgress(query) {
@@ -89,6 +129,7 @@ const asyncHook = asyncHooks.createHook({ init, before, after, destroy, promiseR
 function init(asyncId, type, triggerAsyncId, resource) {  // resource may not have completed construction when this callback runs, therefore don't expect all fields populated (although doesn't appear to be the actual Task instance either?)
   resource.asyncId = asyncId;
   resource.triggerAsyncId = triggerAsyncId;
+  fs.writeSync(1, `async_hooks.init: asyncId=${asyncId} type=${type} triggerAsyncId=${triggerAsyncId} resource=${inspect(resource)}`);
   if (!!Task.contexts[triggerAsyncId]) {
     Task.contexts[asyncId] = Task.contexts[triggerAsyncId];
     if (type === 'Task') {
