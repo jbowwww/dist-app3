@@ -44,7 +44,7 @@ class Task extends asyncHooks.AsyncResource {
   }
 
   run(...args) {
-    console.log(`Running task '${this.name}' with args=${inspect(args)}`);
+    console.verbose(`Running task '${this.name}' with args=${inspect(args)}`);
     _.pull(Task.created, this);
     this._promise = this.runInAsyncScope(this.fn, this, ...args)
     .catch(err => { console.error(`Task.run '${this.name}' error: ${err.stack||err}`); throw err; })

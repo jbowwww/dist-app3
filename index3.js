@@ -53,19 +53,50 @@ var promisePipeOptions = { catchErrors: app.onError };
 
 //	pipeline(sourceStream, writeable)
 		// { $match: { operation: "insert", hash: null  } }
+ let streamify = async function* ( element, event )
+  {
+    let _resolve = null;
+    let handler = ( ...args ) => { if ( _resolve ) _resolve( ...args ); }
+
+    element.on( event, handler );
+    
+    while( true )
+    {
+      yield new Promise( resolve =>
+      {
+        _resolve = ( ...args )=>{ resolve( ...args ); }
+      });
+    }
+  };
 
 (async function main() {
 	try {
 		await app.dbConnect();
-		await pEvent(
-			File.watch([])
-			.on('change', change => {
-				console.log(`change: insert: _id=${inspect(change)}`);	//.documentKey
-			})
-			.on('error', err => {
-				console.error(`Other error: ${err.stack||err}`);
-			}),
-			{ resolveEvent: 'end' });
+		const fileWatch = streamify(File.watch([]), 'change');
+		
+		console.log(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
+
+		// this don't work etiher, just for a change the mongoose and mongo docs are wrong or it must be a version thing?? but who knows, its all clear as mud
+		// while (!fileWatch.isExhausted()) {
+		// 	if (fileWatch.hasNext()) {
+		// 		let change = fileWatch.next();
+		// 		console.log(`change: insert: _id=${inspect(change)}`);
+		// 	}
+		// }
+
+		// doesn't work ; not async iterable
+		for await (let change of fileWatch) {
+			console.log(`change: insert: _id=${inspect(change)}`);
+		}
+
+		// yield pEvent(, 'change');
+		// 	.on('change', change => {
+		// 		console.log(`change: insert: _id=${inspect(change)}`);	//.documentKey
+		// 	})
+		// 	.on('error', err => {
+		// 		console.error(`Other error: ${err.stack||err}`);
+		// 	}),
+		// 	{ resolveEvent: 'end' });
 		console.log(`done watching`);
 	} catch (err) {
 		console.error(`Other error: ${err.stack||err}`);
