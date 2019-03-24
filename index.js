@@ -99,21 +99,20 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// 	await showHashTotals();
 		// }).run();
 
-		// TODO: Get this one working again
-		await new Task(async function doAudio(task) {
-			for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).batchSize(5).cursor()) {
-				const a = await f.getArtefact();
-				if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
-					if (!a.audio) {
-						await a.addMetaData('audio', {});
-					}
-					// if (!a.audio.isCheckedSince(a.file._ts.updatedAt)) {
-						await a.audio.loadMetadata(a.file);
-					// }
-				}
-				await a.bulkSave();
-			}
-		}).run();
+		// await new Task(async function doAudio(task) {
+		// 	for await (const f of /*task.queryProgress*/(File.find({ hash: { $exists: false } })).batchSize(5).cursor()) {
+		// 		const a = await f.getArtefact();
+		// 		if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
+		// 			if (!a.audio) {
+		// 				await a.addMetaData('audio', {});
+		// 			}
+		// 			if (!a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+		// 				await a.audio.loadMetadata(a.file);
+		// 			}
+		// 		}
+		// 		await a.bulkSave();
+		// 	}
+		// }).run();
 
 		// iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
 		// 	iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),

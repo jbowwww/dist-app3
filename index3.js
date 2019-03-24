@@ -4,7 +4,7 @@
  */
 
 "use strict";
-const console = require('./stdio.js').Get('index3', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index3', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q');
@@ -16,97 +16,59 @@ mongoose.Promise = Q;
 const pEvent = require('p-event');
 const pMap = require('p-map');
 
-	// const FileSys = require('./model/filesys');
-	const Disk = require('./model/filesys/disk.js');
-	const FsEntry = require('./model/filesys/filesys-entry.js');
-	const File = require('./model/filesys/file.js');
-	const Dir = require('./model/filesys/dir.js');// } = FileSys;
-	const Audio = require('./model/audio.js');
-	// const Artefact = require('./Artefact.js');
-
 const app = require('./app.js');
-var promisePipeOptions = { catchErrors: app.onError };
-/* var pipelines = require('./pipelines.js');
- * var pipelines = {
- * 	debug: tap(a => { console.verbose(`\n!!\n\na.isNew=${a.isNew} a.isModified=${a.isModified} a.modifiedPaths=${a.modifiedPaths}\na = ${inspect(a)}\n\n!!\n`); }),
- * 	bulkSave: a => a.bulkSave(),
- * 	doHash: iff( a => a.file && (!a.file.hash || !a.file.hashUpdated < a.file._ts.updated),	a => a.file.doHash() ),
- * 	doAudio: iff( a => a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path),
- * 		iff( a => !a.audio,	a => a.addMetaData('audio', {}) ),
- * 		iff( a => !a.audio.isCheckedSince(a.file._ts.updatedAt), a => a.audio.loadMetadata(a.file) ) )
- * };
- */
-/* New idea - use Artefact to define promise pipes, something like:
- * Artefact.pipeFrom(fsIterate(search), )
- * or maybe
- *
- * fsIterate.pipe(FsEntry.artefactPipe({
- *	 [pipeline ops...]
- * ))
- *
- * ..yeah fuck i dunno haha
- * but see if you can clean up this syntax a bit by putting it into Artefact
- * and combine that with (optionally?) specifying extra types to include in the artefact
- * (artefact still needs an initial mongo doc (newly created or retrieved) to go and find other types associated with the artefact)
- * (how to map dependencies/ordering of type construction in artefacts? e.g. file -> audio -> sample)
- */
+const Task = require('./Task.js');
+// const expressApp = require('./express-app.js');
 
-//	pipeline(sourceStream, writeable)
-		// { $match: { operation: "insert", hash: null  } }
- let streamify = async function* ( element, event )
-  {
-    let _resolve = null;
-    let handler = ( ...args ) => { if ( _resolve ) _resolve( ...args ); }
+// const FileSys = require('./model/filesys');
+const Disk = require('./model/filesys/disk.js');
+const FsEntry = require('./model/filesys/filesys-entry.js');
+const File = require('./model/filesys/file.js');
+const Dir = require('./model/filesys/dir.js');
+const Audio = require('./model/audio.js');
+// const Artefact = require('./Artefact.js');
 
-    element.on( event, handler );
-    
-    while( true )
-    {
-      yield new Promise( resolve =>
-      {
-        _resolve = ( ...args )=>{ resolve( ...args ); }
-      });
-    }
-  };
+async function* streamify(element, event) {
+	let _resolve = null;
+	element.on(event, (...args) => _resolve && _resolve(...args));
+	while (true) {
+		yield new Promise(resolve => _resolve = (...args) => resolve(...args));
+	}
+};
 
 (async function main() {
 	try {
 		await app.dbConnect();
-		const fileWatch = streamify(File.watch([]), 'change');
-		
+		const fileWatch = /*streamify*/(FsEntry.watch([], { fullDocument: 'updateLookup' })/*, 'change'*/);		
 		console.log(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
-
-		// this don't work etiher, just for a change the mongoose and mongo docs are wrong or it must be a version thing?? but who knows, its all clear as mud
-		// while (!fileWatch.isExhausted()) {
-		// 	if (fileWatch.hasNext()) {
-		// 		let change = fileWatch.next();
-		// 		console.log(`change: insert: _id=${inspect(change)}`);
-		// 	}
-		// }
-
-		// doesn't work ; not async iterable
-		for await (let change of fileWatch) {
+		// for await (let change of fileWatch) {
+		await pEvent(fileWatch.on('change', async change => {
 			console.log(`change: insert: _id=${inspect(change)}`);
-		}
-
-		// yield pEvent(, 'change');
-		// 	.on('change', change => {
-		// 		console.log(`change: insert: _id=${inspect(change)}`);	//.documentKey
-		// 	})
-		// 	.on('error', err => {
-		// 		console.error(`Other error: ${err.stack||err}`);
-		// 	}),
-		// 	{ resolveEvent: 'end' });
+			const f = File.hydrate(change.fullDocument);
+			console.verbose(`f = ${inspect(f)}`);
+			const a = await f.getArtefact();
+			if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
+				if (!a.audio) {
+					await a.addMetaData('audio', {});
+				}
+				if (!a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+					await a.audio.loadMetadata(a.file);
+				}
+				console.verbose(`a1 = ${inspect(a)}`);
+				await a.bulkSave();
+			}
+			console.verbose(`a = ${inspect(a)}`);
+		})
+		.on('error', error => {
+			console.error(`EE error: ${err.stack||err}`);
+		}), { resolutionEvents: [ 'end' ]});
 		console.log(`done watching`);
 	} catch (err) {
 		console.error(`Other error: ${err.stack||err}`);
+	} finally {
+		await app.quit();
 	}
-	await app.quit();
 })();
-
-// (function looper() { return Q.delay(1000).then(looper); })();
-
-
 
 // .then(() => promisePipe(promisePipeOptions,
 // 	File.find({ hash: { $exists: false } }).cursor(),

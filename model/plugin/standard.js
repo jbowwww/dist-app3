@@ -120,7 +120,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		if (!_.isDate(timestamp)) {
 			throw new TypeError(`isCheckedSince: timestamp must be a Date`);
 		}
-		return !this.isNew && this._ts.checkedAt > timestamp;
+		return !this.isNew && this._ts.checkedAt && this._ts.checkedAt > timestamp;
 	});
 
 	/* Updates an (in memory, not DB) document with values in the update parameter,

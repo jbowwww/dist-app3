@@ -6,6 +6,28 @@ const _ = require('lodash');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const Task = require('./Task.js');
+const v8 = require('v8');
+
+function formatSizes(v) {
+	if (_.isPlainObject(v)) {
+		return _.mapValues(v, (value, key) => formatSizes(value));
+	} else if (_.isFinite(v)) {
+		const suffixes = [ '', 'k', 'm', 'g', 't' ];
+		let pwr = 0;
+		for (var f = v; f >= 1024; f /= 1024) {
+			pwr++
+			console.verbose(`formatSizes: v=${v} f=${f} pwr=${pwr} suffix[pwr]=${suffixes[pwr-1]}`);
+		}
+		v = f;
+		// for (var pwr = 1; v > 1024**pwr; pwr++) {
+		// 	console.verbose(`formatSizes: v=${v} pwr=${pwr} suffix[pwr]=${suffixes[pwr-1]}`);
+		// }
+
+		return '' + (v /*/ pwr*/).toFixed(1) + suffixes[pwr];
+	} else {
+		throw new TypeError(`formatSizes: typeof v = '${typeof v}'`);
+	}
+}
 
 var app = {
 
@@ -73,7 +95,11 @@ var app = {
 
 	logStats() {
 		console.verbose( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
-			`models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n`);
+			`models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
+			`heap stats: ${inspect(formatSizes(v8.getHeapStatistics()))}\n` + 
+			`mem usage: ${inspect(formatSizes(process.memoryUsage()))}\n` +
+			`cpu usage: ${inspect(/*formatSizes*/(_.mapValues(process.cpuUsage(), v => v / 1000000)))}\n` +
+			`uptime: ${process.uptime()}\n`);
 			// `Tasks.all (${Task.all.length}): ${inspect(Task.all, { depth: 3, compact: false } )} Tasks.uniqueContexts (${Task.uniqueContexts.length})=${inspect(Task.uniqueContexts, { depth: 3, compact: false })}`);
 		app.logErrors();
 	},
