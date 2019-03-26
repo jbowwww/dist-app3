@@ -2,8 +2,9 @@
 "use strict";
 const console = require('./stdio.js').Get('app', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
+const { promisifyMethods } = require('./utility.js');
+const fs = promisifyMethods(require('fs'));
 const _ = require('lodash');
-const fs = require('fs');
 const mongoose = require('mongoose');
 const Task = require('./Task.js');
 const v8 = require('v8');
@@ -16,7 +17,7 @@ function formatSizes(v) {
 		let pwr = 0;
 		for (var f = v; f >= 1024; f /= 1024) {
 			pwr++
-			console.verbose(`formatSizes: v=${v} f=${f} pwr=${pwr} suffix[pwr]=${suffixes[pwr-1]}`);
+			console.debug(`formatSizes: v=${v} f=${f} pwr=${pwr} suffix[pwr]=${suffixes[pwr-1]}`);
 		}
 		v = f;
 		// for (var pwr = 1; v > 1024**pwr; pwr++) {
@@ -28,6 +29,8 @@ function formatSizes(v) {
 		throw new TypeError(`formatSizes: typeof v = '${typeof v}'`);
 	}
 }
+
+// fs.truncate('errors.txt', 0);
 
 var app = {
 
@@ -42,7 +45,7 @@ var app = {
 			app.db = { connection, url };
 			return connection;
 		} catch (err) {
-			console.error(`dbConnect: Error opening db '${url}': ${err.stack||err}`);
+			app.onError(`dbConnect: Error opening db '${url}': ${err.stack||err}`);
 		}
 	},
 	async dbClose() {
@@ -52,7 +55,7 @@ var app = {
 			console.log(`dbClose: db closed '${app.db.url}'`);
 			app.db = {};
 		} catch (err) {
-			console.error(`dbClose: Error closing db '${app.db.url}': ${err.stack||err}`);
+			app.onError(`dbClose: Error closing db '${app.db.url}': ${err.stack||err}`);
 		}
 	},
 	
@@ -99,23 +102,76 @@ var app = {
 			`heap stats: ${inspect(formatSizes(v8.getHeapStatistics()))}\n` + 
 			`mem usage: ${inspect(formatSizes(process.memoryUsage()))}\n` +
 			`cpu usage: ${inspect(/*formatSizes*/(_.mapValues(process.cpuUsage(), v => v / 1000000)))}\n` +
-			`uptime: ${process.uptime()}\n`);
+			`uptime: ${process.uptime()}\n` +
+			`Task.current: ${inspect(Task.current)}`);
 			// `Tasks.all (${Task.all.length}): ${inspect(Task.all, { depth: 3, compact: false } )} Tasks.uniqueContexts (${Task.uniqueContexts.length})=${inspect(Task.uniqueContexts, { depth: 3, compact: false })}`);
 		app.logErrors();
 	},
 	logErrors() {
 		if (app.errors && app.errors.length > 0 && app._errorLastWritten < app.errors.length) {
-			fs.appendFileSync('errors.txt', app.errors.join('\n'));
+			fs.appendFileSync('errors.txt', app.errors.map(e => (e.stack||e)+'\n\n'));
 			console.log(`Errors: ${inspect(app.errors, { depth: 3, compact: false })}`);
 			app._errorLastWritten = app.errors.length;
 		}
+		if (app.warnings && app.warnings.length > 0 && app._warningLastWritten < app.warnings.length) {
+			fs.appendFileSync('warnings.txt', app.warnings.map(e => (e.stack||e)+'\n\n'));
+			console.log(`Errors: ${inspect(app.warnings, { depth: 3, compact: false })}`);
+			app._warningLastWritten = app.warnings.length;
+		}
 	},
 	
+	warnings: [],
+	_warningLastWritten: 0,
+	onWarning(err, msg = '', rethrow) {
+		if (_.isString(err) && arguments.length <= 2) {
+			if (msg !== undefined && !(msg instanceof Boolean))
+			err = new Error(err);
+			rethrow = true;
+			msg = '';
+		} else if (!(err instanceof Error)) {
+			throw new Error(`onWarning: err should be instanceof Error: msg='${msg}' rethrow=${rethrow}`);
+		} else if (msg instanceof Boolean) {
+			rethrow = msg;
+			msg = '';
+		} else if (!_.isString(msg)) {
+			throw new Error(`onWarning: msg(optional) should be String and rethrow(optional) should be Boolean: err=${err.stack||err} msg=${msg} rethrow=${rethrow}`);
+		} else if (rethrow !== undefined && (!rethrow instanceof Boolean)) {
+			throw new Error(`onWarning: msg(optional) should be String and rethrow(optional) should be Boolean: err=${err.stack||err} msg=${msg} rethrow=${rethrow}`);
+		} else if (rethrow === undefined) {
+			rethrow = false;
+		}
+		app.warnings.push(err);
+		console.warn(`${msg?msg+' ':''}error: ${err.stack||err}`);
+		if (rethrow) {
+			throw err;
+		}
+	},
+
 	errors: [],
 	_errorLastWritten: 0,
-	onError(err, msg = '') {
+	onError(err, msg = '', rethrow) {
+		if (_.isString(err) && arguments.length <= 2) {
+			if (msg !== undefined && !(msg instanceof Boolean))
+			err = new Error(err);
+			rethrow = true;
+			msg = '';
+		} else if (!(err instanceof Error)) {
+			throw new Error(`onError: err should be instanceof Error: err=${err} msg='${msg}' rethrow=${rethrow}`);
+		} else if (msg instanceof Boolean) {
+			rethrow = msg;
+			msg = '';
+		} else if (!_.isString(msg)) {
+			throw new Error(`onError: msg(optional) should be String and rethrow(optional) should be Boolean: err=${err.stack||err} msg=${msg} rethrow=${rethrow}`);
+		} else if (rethrow !== undefined && (!rethrow instanceof Boolean)) {
+			throw new Error(`onError: msg(optional) should be String and rethrow(optional) should be Boolean: err=${err.stack||err} msg=${msg} rethrow=${rethrow}`);
+		} else if (rethrow === undefined) {
+			rethrow = true;
+		}
 		app.errors.push(err);
 		console.warn(`${msg?msg+' ':''}error: ${err.stack||err}`);
+		if (rethrow) {
+			throw err;
+		}
 	},
 	onUncaughtException(err, msg = '') {
 		app.onError(err, msg);

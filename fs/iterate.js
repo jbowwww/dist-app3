@@ -15,10 +15,11 @@ const Q = require('q');
 Q.longStackSupport = true;
 const getDevices = require('./devices.js');
 const pathDepth = require('./path-depth.js');
+const { trace } = require('../Task.js');
+
+module.exports = /*trace*/({ createFsItem, iterate });
 
 // creates a POJO FS item to be used by iterate. Takes a path and returns an object containing path, stats, and fileType
-module.exports = { createFsItem, iterate };
-
 function createFsItem(path, stats) {
 	return ({
 		path: /*nodePath.resolve*/(path),

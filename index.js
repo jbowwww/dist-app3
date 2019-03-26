@@ -25,7 +25,7 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/mystuff', maxDepth: 0 }
+	{ path: '/mnt/media', maxDepth: 1 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -54,6 +54,8 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 */
 
 
+// TODO: Run with --inspect, try to evaluate various internal variables
+
 (async function main() {
 	
 	try {
@@ -62,7 +64,7 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
 		// await new Task(function diskPopulate() { return Disk.findOrPopulate().run(); });
-		
+		debugger;
 		await pMap(searches, async search =>
 			await new Task(async function fsSearch(task) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
