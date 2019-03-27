@@ -51,6 +51,7 @@ var audioSchema = new mongoose.Schema({
     native: mongoose.SchemaTypes.Mixed // nativeSchema
 });
 
+// Note: linking of artefacts should be possible via just _primary and _primaryType
 // audioSchema.virtual('file').set(function(file) {
 //     this._file = file;
 //     this.fileId = file._id;

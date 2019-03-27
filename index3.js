@@ -9,8 +9,8 @@ const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0
 const _ = require('lodash');
 const Q = require('q');
 const hashFile = require('./fs/hash.js');
-const fs = promisifyMethods(require('fs'));
-const fsIterate = require('./fs/iterate.js').iterate;
+// const fs = promisifyMethods(require('fs'));
+// const fsIterate = require('./fs/iterate.js').iterate;
 const mongoose = require('mongoose');	
 mongoose.Promise = Q;
 const pEvent = require('p-event');
@@ -51,7 +51,7 @@ async function* streamify(element, event) {
 				if (!a.audio) {
 					await a.addMetaData('audio', {});
 				}
-				if (!a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+				if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
 					await a.audio.loadMetadata(a.file);
 				}
 				console.verbose(`a1 = ${inspect(a)}`);

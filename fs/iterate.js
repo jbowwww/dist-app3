@@ -81,7 +81,8 @@ async function* iterate(options) {
 			if (!options.filter || options.filter(item)) {
 				var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
 				if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
-					var names = await nodeFs.readdir(item.path);
+					try {
+						var names = await nodeFs.readdir(item.path);
 						// .then(names => {
 						// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 						console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
@@ -89,7 +90,10 @@ async function* iterate(options) {
 
 						yield item;
 						// next();
-					// }).catch(err => nextHandleError(err));
+						// }).catch(err => nextHandleError(err));
+					} catch (e) {
+						nextHandleError(e);
+					}
 				} else {
 					yield item;
 					// next();
@@ -114,8 +118,8 @@ async function* iterate(options) {
 		options.handleError(err);
 		self.errors.push(err);
 		// process.nextTick(() =>
-		 self.emit('error', err);
+		 // self.emit('error', err);
 		 // );
-		return next();//1;
+		// return next();//1;
 	}
 }

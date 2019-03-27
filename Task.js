@@ -1,6 +1,6 @@
 
 "use strict";
-const console = require('./stdio.js').Get('Task', { minLevel: 'debug' }); // debug verbose log
+const console = require('./stdio.js').Get('Task', { minLevel: 'log' }); // debug verbose log
 const util = require('util');
 const inspect = require('./utility.js').makeInspect({ depth: 3, getters: true, /*colors: true,*/ /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
@@ -169,6 +169,27 @@ Task.trace = function trace(target) {
       // return;
     // });
   }
+};
+
+Task.parallel = async function* parallel(options, generator) {
+  if (arguments.length === 1) {
+    generator = options;
+    options = { concurrency: 1 };
+  }
+  if (!_.isPlainObject(generator) || !generator[Symbol.asyncIterator]) {
+    throw new TypeError(`generator is not an object or does not have Symbol.asyncIterator (generator=${inspect(generator)})`);
+  }
+  const promises = new Array(options.ooncurrency).fill(Promise.resolve());
+  // Recursively chain the next Promise to the currently executed Promise
+  const gen = generator[Symbol.asyncIterator]();
+  const done = false;
+  function chainNext(p) {
+    if (!done) {
+      return p.then(() => gen.next().then(r => { done = r.done || false; return chainNext(r).then(() => r.value); }));
+    }
+    return p;
+  }
+  await Promise.all(promises.map(chainNext));
 };
 
 module.exports = Task;
