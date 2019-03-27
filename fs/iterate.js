@@ -16,6 +16,7 @@ Q.longStackSupport = true;
 const getDevices = require('./devices.js');
 const pathDepth = require('./path-depth.js');
 const { trace } = require('../Task.js');
+const { Thread, ThreadPool } = require('isolated-threads');
 
 module.exports = /*trace*/({ createFsItem, iterate });
 
@@ -37,40 +38,38 @@ function createFsItem(path, stats) {
 	});
 }
 
-async function* iterate(options) {
-	options = _.defaults(options, {
-		path: '.',
-		maxDepth: 1,
-		// queueMethod: 'shift',
-		filter: undefined,
-		// removePathPrefix: undefined,
-		objectMode: true,
-		highWaterMark: 16,
-		handleError(err) {
-			console.warn(`iterate: ${err}`);//${err.stack||err}`);
-		}
-	});
-	
-	var path = nodePath.resolve(options.path);
-	console.verbose(`iterate('${path}', ${inspect(options, { compact: false })})`);
-  	
-	var self = {
-		
-		root: path,
-		// rootDepth: path.split(nodePath.sep).length - 1,
-		rootItem: null,
-		paths: [path],
-		errors: [],
-		promisePipe(...args) { return /*stream.finished*/(pipeline(self, new PromisePipe(...args).stream())); },
-		task: { max: 1, current: 0 }
-	};
-// _.assign(iterate.prototype, self);
-	// yield (async function* next() {
-		for (let i = 0; i < self.paths.length; i++) { //self.paths.length) {
-			var path = self.paths[i];//options.queueMethod]();
+async function iterate(options) {
+	let context = () => {
+		const _ = _;//require('lodash');
+		const nodePath = nodePath;// require('path');
+		const nodeFs = nodeFs;
+		const inspect = inspect;
+		options = _.defaults(options, {
+			path: '.',
+			maxDepth: 1,
+			concurrency: 1,
+			// queueMethod: 'shift',
+			filter: undefined,
+			// removePathPrefix: undefined,
+			objectMode: true,
+			highWaterMark: 16,
+			handleError(err) {
+				console.warn(`iterate: ${err}`);//${err.stack||err}`);
+			}
+		});
+		var self = {
 			
-			self.task.max = self.paths.length - 1;
-			self.task.current = i;
+			root: path,
+			// rootDepth: path.split(nodePath.sep).length - 1,
+			rootItem: null,
+			paths: [path],
+			errors: [],
+			// promisePipe(...args) { return /*stream.finished*/(pipeline(self, new PromisePipe(...args).stream())); },
+			task: { max: 1, current: 0 }
+		};
+		return async (path) => {
+			// self.task.max = self.paths.length - 1;
+			// self.task.current = i;
 
 			var stats = await nodeFs.lstat(path);
 			var item = createFsItem(path, stats);
@@ -86,20 +85,42 @@ async function* iterate(options) {
 						// .then(names => {
 						// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
 						console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
-						_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
+						_.forEach(names, name => {
+							// self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
 
-						yield item;
+						// yield item;
+						threadPool.run(nodePath.join(item.path, name)).then(res => {
+						});
+					});
+						
 						// next();
 						// }).catch(err => nextHandleError(err));
 					} catch (e) {
 						nextHandleError(e);
 					}
-				} else {
-					yield item;
-					// next();
-				}
+				} 
+				// else {
+				// 	yield item;
+				// 	// next();
+				// }
+						console.log(`threadPool.run('${item.path}'): res=${inspect(res)}`);
+					
 			}
-		}
+		};
+	};
+	const threadPool = new ThreadPool(context, 4);
+	
+	
+	var path = nodePath.resolve(options.path);
+	console.verbose(`iterate('${path}', ${inspect(options, { compact: false })})`);
+  	return threadPool.run(path).then(() => { console.log(`done`); });
+// _.assign(iterate.prototype, self);
+	// yield (async function* next() {
+		// for (let i = 0; i < self.paths.length; i++) { //self.paths.length) {
+		// 	var path = self.paths[i];//options.queueMethod]();
+	
+			
+		// }
 	// })();
 			// .catch(err => {
 			// 	console.error(err);
@@ -108,18 +129,18 @@ async function* iterate(options) {
 		
 		// }
 	// })();
-	if (self.errors.length) {
-		console.warn(`iterate('${self.root}'): stream end: ${self.errors.length} errors: ${self.errors.join('\n\t')}`);
-	} else {
-		console.debug(`iterate('${self.root}'): stream end`);
-	}
-	return;
-	function nextHandleError(err) {
-		options.handleError(err);
-		self.errors.push(err);
-		// process.nextTick(() =>
-		 // self.emit('error', err);
-		 // );
-		// return next();//1;
-	}
+	// if (self.errors.length) {
+	// 	console.warn(`iterate('${self.root}'): stream end: ${self.errors.length} errors: ${self.errors.join('\n\t')}`);
+	// } else {
+	// 	console.debug(`iterate('${self.root}'): stream end`);
+	// }
+	// return;
+	// function nextHandleError(err) {
+	// 	options.handleError(err);
+	// 	self.errors.push(err);
+	// 	// process.nextTick(() =>
+	// 	 // self.emit('error', err);
+	// 	 // );
+	// 	// return next();//1;
+	// }
 }

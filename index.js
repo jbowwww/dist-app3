@@ -25,7 +25,7 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 0 }
+	{ path: '/mnt/media', maxDepth: 0, concurrency: 2 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -69,14 +69,15 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await pMap(searches, async search =>	// do i need this to be async when i return an await'ed value ? can i just directly return the promise?
 			await new Task(async function fsSearch(task) {
 				// for await (let f of /*task.trackProgress*/Task.parallel({ concurrency: 2 }, (fsIterate(search)))) {
-				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-					await new Task(async function fSEntry(/*f*/) {
-						f = await FsEntry.findOrCreate(f); 	// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
-						console.debug(`f.path: '${f.path}'`);
-						await (f.fileType === 'dir' ? f.save() : f.bulkSave({ maxBatchSize: 20,	batchTimeout: 1250 }));
-					}).run();
-					// console.verbose(`task=${inspect(task)}`);
-				}
+				// for await (let f of task.trackProgress(fsIterate(search))) {
+				await (fsIterate(search))
+				// 	await new Task(async function fSEntry(/*f*/) {
+				// 		f = await FsEntry.findOrCreate(f); 	// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
+				// 		console.debug(`f.path: '${f.path}'`);
+				// 		await (f.fileType === 'dir' ? f.save() : f.bulkSave({ maxBatchSize: 20,	batchTimeout: 1250 }));
+				// 	}).run();
+				// 	// console.verbose(`task=${inspect(task)}`);
+				// }
 			}).run());
 
 		// await new Task(async function hashFiles(task) {
