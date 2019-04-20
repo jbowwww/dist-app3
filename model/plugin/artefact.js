@@ -1,5 +1,5 @@
 
-const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const _ = require('lodash');
@@ -28,7 +28,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 	schema.method('getArtefact', function getArtefact(options = {}) {
 		
 		var doc = this;
-		var dk = schema.get('discriminatorKey');
+		// var dk = schema.get('discriminatorKey');
 		// var oldModel = this.constructor;
 		var model = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
 		var modelName = model.modelName;
@@ -119,7 +119,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 		}, {
 			// _primaryDataType: { enumerable: true, value: modelName },
 			// _primaryDataId: doc._id,
-			[model.baseModelName]: { writeable: true, enumerable: false, value: doc }, 
+			// [model.baseModelName]: { writeable: true, enumerable: false, value: doc }, 
 			[modelName]: { writeable: true, enumerable: true, value: doc }
 			// [util.inspect.custom](depth, options): { return }
 		});
@@ -130,8 +130,8 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 				var m = mongoose.model(modelName);
 				return m.discriminators === undefined && model.baseModelName != m.baseModelName && model.modelName != m.baseModelName && model.baseModelName != m.modelName;
 			});
-		
-		console.debug(`[model ${modelName}(dk=${dk})].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);
+		//(dk=${dk})
+		console.debug(`[model ${modelName}].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);
 
 		return Q.all(_.map(allModels, modelName => a[modelName] ? Q(a[modelName]) : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)))
 		.then(() => { console.debug(`getArtefact: modelName=${modelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`); })

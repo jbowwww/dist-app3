@@ -39,25 +39,34 @@ async function* streamify(element, event) {
 (async function main() {
 	try {
 		await app.dbConnect();
-		const fileWatch = /*streamify*/(FsEntry.watch([], { fullDocument: 'updateLookup' })/*, 'change'*/);		
+		const fileWatch = /*streamify*/(FsEntry.watch([], { /*fullDocument: 'updateLookup'*/ })/*, 'change'*/);		
 		console.log(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
 		// for await (let change of fileWatch) {
+			// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
+			// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
+			// hence creating 2 distinct audio objects and saving them both. Add some sort of queue, or keep track of currently processing
+			// files, or something, or just process insert OR update (although that is not the right long-term soilution, since you
+			// really do want to process both)
 		await pEvent(fileWatch.on('change', async change => {
-			console.log(`change: insert: _id=${inspect(change)}`);
-			const f = File.hydrate(change.fullDocument);
-			console.verbose(`f = ${inspect(f)}`);
-			const a = await f.getArtefact();
-			if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
-				if (!a.audio) {
-					await a.addMetaData('audio', {});
+			console.log(`change: ${inspect(change)} typeof(change.documentKey._id)=${typeof change.documentKey._id}`);
+			if (!!change.documentKey && !!change.documentKey._id) {
+				const f = await File.findById(change.documentKey._id);
+				console.verbose(`f = ${inspect(f)}`);
+				if (!!f) {
+					const a = await f.getArtefact();
+					if (a && a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
+						if (!a.audio) {
+							await a.addMetaData('audio', {});
+						}
+						if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+							await a.audio.loadMetadata(a.file);	
+						}
+						console.verbose(`a1 = ${inspect(a)}`);
+						await a.save();	//bulkSave
+					}
+					// console.verbose(`a = ${inspect(a)}`);
 				}
-				if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
-					await a.audio.loadMetadata(a.file);
-				}
-				console.verbose(`a1 = ${inspect(a)}`);
-				await a.bulkSave();
 			}
-			console.verbose(`a = ${inspect(a)}`);
 		})
 		.on('error', error => {
 			console.error(`EE error: ${err.stack||err}`);

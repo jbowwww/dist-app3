@@ -61,7 +61,13 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 						delete model._bulkSaveTimeout;
 					}
 
-					var bulkOps = _.map(bs, bsDoc => ({ updateOne: { filter: { _id: bsDoc.doc._doc._id }, update: { $set: bsDoc.doc._doc }, upsert: true } }));
+					var bulkOps = _.map(bs, bsDoc => ({
+						updateOne: {
+							filter: { _id: bsDoc.doc._doc._id },
+							update: { $set: bsDoc.doc._doc },
+							upsert: true
+						}
+					}));
 					console.debug(`[model ${model.modelName}].innerBulkSave( [${bulkOps.length}] = ${inspect(bulkOps, { depth: 5, compact: true })} )`);
 
 					// 190112: TODO: Need to separate results for each individual doc and handle accordingly.

@@ -294,13 +294,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		var jq = JSON.stringify(q);
 		var r = schema._cache.get(jq);
 		if (!r) {
-			console.debug(`useCache: new q '${inspect(q, { compact: true })}'`);
-			return this.exec().then(r => {
+			console.verbose(`useCache: new q '${inspect(q, { compact: true })}'`);
+			return Q(this.exec()).then(r => {
 				schema._cache.set(jq, { created: Date.now(), expires: null, hits: 0, result: r });
-				return Q(r);
+				return /*Q*/(r);
 			});
 		} else {
-			console.debug(`useCache: found '${inspect(q, { compact: true })}'`);
+			console.verbose(`useCache: found '${inspect(q, { compact: true })}'`);
 			return Q(r);
 		}
 	};

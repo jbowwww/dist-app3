@@ -10,7 +10,7 @@ const pAll = require('p-all');
 const hashFile = require('./fs/hash.js');
 const fs = require('fs');
 const fsIterate = require('./fs/iterate.js').iterate;
-const mongoose = require('mongoose');	
+const mongoose = require('mongoose');
 mongoose.Promise = Q;
 
 const app = require('./app.js');
@@ -53,6 +53,57 @@ var tasks = {
 console.verbose(`tasks: ${inspect(tasks)}`);
 */
 
+function getAllSubdocs(topDoc) {
+	const Document = mongoose.Document;
+  let DocumentArray =  mongoose.Types.DocumentArray; //require('mongoose/types/documentarray');// mongoose.Schema.Types.DocumentArray;// || (DocumentArray = require('mongoose/types/documentarray'));
+  let Embedded = mongoose.Types.Embedded; //require('mongoose/types/embedded');// mongoose.Schema.Types.Embedded; //Embedded || require('mongoose/types/embedded');
+
+  function docReducer(doc, seed, path) {
+    const val = path ? doc[path] : doc;
+    if (val instanceof Embedded) {
+      seed.push(val);
+    }
+    else if (val instanceof Map) {
+      seed = Array.from(val.keys()).reduce(function(seed, path) {
+        return docReducer(val.get(path), seed, null);
+      }, seed);
+    }
+    else if (val && val.$isSingleNested) {
+      seed = Object.keys(val._doc).reduce(function(seed, path) {
+        return docReducer(val._doc, seed, path);
+      }, seed);
+      seed.push(val);
+    }
+    else if (val && val.isMongooseDocumentArray) {
+      val.forEach(function _docReduce(doc) {
+        if (!doc || !doc._doc) {
+          return;
+        }
+        if (doc instanceof Embedded) {
+          seed.push(doc);
+        }
+        seed = Object.keys(doc._doc).reduce(function(seed, path) {
+          return docReducer(doc._doc, seed, path);
+        }, seed);
+      });
+    } else if (val instanceof Document && val.$__isNested) {
+      if (val) {
+        seed = Object.keys(val).reduce(function(seed, path) {
+          return docReducer(val, seed, path);
+        }, seed);
+      }
+    }
+    return seed;
+  }
+
+  // const _this = this;
+  const subDocs = Object.keys(topDoc._doc).reduce(function(seed, path) {
+    return docReducer(topDoc, seed, path);
+  }, []);
+
+  return subDocs;
+};
+
 
 // TODO: Run with --inspect, try to evaluate various internal variables
 
@@ -66,18 +117,18 @@ console.verbose(`tasks: ${inspect(tasks)}`);
 		await new Task(function diskPopulate() { return Disk.findOrPopulate(); }).run();
 
 		// debugger;
-		await pMap(searches, async search =>	// do i need this to be async when i return an await'ed value ? can i just directly return the promise?
-			await new Task(async function fsSearch(task) {
+		await pMap(searches, async search => {	// do i need this to be async when i return an await'ed value ? can i just directly return the promise?
+			// await new Task(async function fsSearch(task) {
 				// for await (let f of /*task.trackProgress*/Task.parallel({ concurrency: 2 }, (fsIterate(search)))) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
 					await new Task(async function fSEntry(/*f*/) {
 						f = await FsEntry.findOrCreate(f); 	// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
-						console.debug(`f.path: '${f.path}'`);
+						console.log(`f.path: '${f.path}', f.subdocs['${typeof f}' ${f.constructor.name} ${f.constructor.modelName}]=${inspect(getAllSubdocs(f))}`);
 						await (f.fileType === 'dir' ? f.save() : f.bulkSave({ maxBatchSize: 20,	batchTimeout: 1250 }));
 					}).run();
 					// console.verbose(`task=${inspect(task)}`);
 				}
-			}).run());
+			});//.run());
 
 		// await new Task(async function hashFiles(task) {
 		// 	async function showHashTotals() {

@@ -40,7 +40,7 @@ disk.static('findOrPopulate', async function findOrPopulate(task) {
 	var pr = getDevices();
 	// console.log(`getDevices: pr=${inspect(pr)}`);
 	let jsonDevices = await pr;// getDevices();
-	console.verbose(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
+	console.debug(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
 	try {
 		// task.progress.max = jsonDevices.length;
 		await pMap(jsonDevices, async disk => {
