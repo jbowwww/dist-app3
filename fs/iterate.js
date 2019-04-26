@@ -72,16 +72,16 @@ async function* iterate(options) {
 			self.task.max = self.paths.length - 1;
 			self.task.current = i;
 
-			var stats = await nodeFs.lstat(path);
-			var item = createFsItem(path, stats);
-			if (path === self.root) {
-				self.rootItem = item;
-			}
+			try {
+				var stats = await nodeFs.lstat(path);
+				var item = createFsItem(path, stats);
+				if (path === self.root) {
+					self.rootItem = item;
+				}
 
-			if (!options.filter || options.filter(item)) {
-				var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
-				if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
-					try {
+				if (!options.filter || options.filter(item)) {
+					var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
+					if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
 						var names = await nodeFs.readdir(item.path);
 						// .then(names => {
 						// if (options.filter) names = names.filter(typeof options.filter !== 'function' ? name => name.match(options.filter): options.filter);
@@ -91,13 +91,13 @@ async function* iterate(options) {
 						yield item;
 						// next();
 						// }).catch(err => nextHandleError(err));
-					} catch (e) {
-						nextHandleError(e);
+					} else {
+						yield item;
+						// next();
 					}
-				} else {
-					yield item;
-					// next();
 				}
+			} catch (e) {
+				nextHandleError(e);
 			}
 		}
 	// })();
@@ -113,10 +113,11 @@ async function* iterate(options) {
 	} else {
 		console.debug(`iterate('${self.root}'): stream end`);
 	}
-	return;
+	
 	function nextHandleError(err) {
 		options.handleError(err);
 		self.errors.push(err);
+		console.warn(`iterate('${self.root}'): ${err.stack|err}`);
 		// process.nextTick(() =>
 		 // self.emit('error', err);
 		 // );

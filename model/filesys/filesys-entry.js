@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'debug' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/fs-entry', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const _ = require('lodash');
 const Q = require('q');
@@ -85,7 +85,8 @@ fsEntry.post('construct', function doCreate(doc, next) {
 			partition => doc.path.startsWith(partition.mountpoint)))
 		.then(partition => _.assign(doc, { partition: partition._id }))))
 
-	.tap(() => console.debug(`[model ${model.modelName}].doCreate: doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh})\ndisks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)}`))
+	// count() returns the query object. Need to .exec() ? and maybe await ?
+	// .tap(() => console.debug(`[model ${model.modelName}].doCreate: doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh}) - disks.count=${inspect(mongoose.model('disk').count(), { compact: true })}, partitions.count=${inspect(mongoose.model('partition').count(), { compact: true })} - fs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)}`))
 	.finally(() => { doCreateLevel--; next(); });
 });
 

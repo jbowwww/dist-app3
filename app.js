@@ -6,12 +6,19 @@ const { promisifyMethods } = require('./utility.js');
 const fs = promisifyMethods(require('fs'));
 const _ = require('lodash');
 const mongoose = require('mongoose');
-const Task = require('./Task.js');
+// const Task = require('./Task.js');
 const v8 = require('v8');
 
-function formatSizes(v) {
+// only specify propertyNames if v is an object. Can be an array as proeprtyNames[0] or array of strings for propertyNames
+function formatSizes(v, ...propertyNames) {
+	if (propertyNames.length === 1 && _.isArray(propertyNames[0])) {
+		propertyNames = propertyNames[0];
+	}
+	if (propertyNames.length > 0 && (!(_.every(propertyNames, pn => typeof pn === 'string')))) {
+		throw new TypeError(`propertyNames must be an array of strings`);
+	}
 	if (_.isPlainObject(v)) {
-		return _.mapValues(v, (value, key) => formatSizes(value));
+		return _.mapValues(v, (value, key) => propertyNames.length === 0 || propertyNames.includes(key) ? formatSizes(value) : value);
 	} else if (_.isFinite(v)) {
 		const suffixes = [ '', 'k', 'm', 'g', 't' ];
 		let pwr = 0;
@@ -102,8 +109,8 @@ var app = {
 			`heap stats: ${inspect(formatSizes(v8.getHeapStatistics()))}\n` + 
 			`mem usage: ${inspect(formatSizes(process.memoryUsage()))}\n` +
 			`cpu usage: ${inspect(/*formatSizes*/(_.mapValues(process.cpuUsage(), v => v / 1000000)))}\n` +
-			`uptime: ${process.uptime()}\n` +
-			`Task.current: ${inspect(Task.current)}`);
+			`uptime: ${process.uptime()}\n`);
+			// `Task.current: ${inspect(Task.current)}`);
 			// `Tasks.all (${Task.all.length}): ${inspect(Task.all, { depth: 3, compact: false } )} Tasks.uniqueContexts (${Task.uniqueContexts.length})=${inspect(Task.uniqueContexts, { depth: 3, compact: false })}`);
 		app.logErrors();
 	},

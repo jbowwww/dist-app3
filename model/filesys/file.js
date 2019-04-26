@@ -32,6 +32,9 @@ file.plugin(require('../plugin/stat.js'), [ 'doHash' ]);
 
 // Will this be useful? Bevcause I believe virtuals cannot be used in a mongo query
 file.virtual('extension').get(function extension() {
+	if (!this.path) {
+		return '';
+	}
 	var n = this.path.lastIndexOf('.');
 	var n2 = Math.max(this.path.lastIndexOf('/'), this.path.lastIndexOf('\\'));
 	return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);

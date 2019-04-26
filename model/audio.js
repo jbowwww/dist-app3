@@ -5,6 +5,7 @@ const inspectPretty = require('../utility.js').makeInspect({ depth: 5, compact: 
 const _ = require('lodash');
 const Q = require('q');
 const mongoose = require('mongoose');
+// mongoose.set('debug', true);
 const mm = require('music-metadata');
 
 var formatSchema = new mongoose.Schema({

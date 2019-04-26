@@ -4,7 +4,7 @@
  */
 
 "use strict";
-const console = require('./stdio.js').Get('index3', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('index5', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q');
@@ -34,42 +34,34 @@ const Audio = require('./model/audio.js');
 		const fileWatch = (FsEntry.watch([], { /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
 		console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
 
+		for await (const f of File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor()) {
+			await processFile(f)
+		}
 		// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
 		// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
 		// hence creating 2 distinct audio objects and saving them both. Add some sort of queue, or keep track of currently processing
 		// files, or something, or just process insert OR update (although that is not the right long-term soilution, since you
 		// really do want to process both)
-		await pEvent( fileWatch.on('change', async change => {
-			console.verbose(`change: ${inspect(change)}`);// typeof(change.documentKey._id)=${typeof change.documentKey._id}`);
-
-			// if (!!change.documentKey && !!change.documentKey._id) {
-				const f = await File.findById(change.documentKey._id);
-				console.debug(`f = ${inspect(f)}`);
-				if (!!f) {
-
-					await f.getArtefact(async a => {	// const a = await f.getArtefact();
-						if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
-							console.verbose(`a1 = ${inspect(a)}`);
-
-							if (!a.audio) {
-								await a.addMetaData('audio', {});
-							}
-							if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
-								await a.audio.loadMetadata(a.file);	
-							}
-							
-							await a.save();	//bulkSave
-						}
-					});
-					// console.verbose(`a = ${inspect(a)}`);
-				}
-			// }
-		}, { resolutionEvents: [ 'end' ] }) 
-		.on('error', error => {
-			console.error(`EE error: ${err.stack||err}`);
-		}) );
+		await pEvent(
+			fileWatch
+			.on('change', async change => await processFile(await File.findById(change.documentKey._id))) 
+			.on('error', error => {	console.error(`EE error: ${err.stack||err}`); }),
+			{ resolutionEvents: [ 'end' ] }
+		);
 
 		console.log(`done watching`);
+
+		async function processFile(f) {
+			console.debug(`f = ${inspect(f)}`);
+			if (f) {
+				await f.getArtefact(async a => {	// const a = await f.getArtefact();
+					if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
+						await a.file.doHash();
+						await a.bulkSave();
+					}
+				});
+			}
+		}
 
 	} catch (err) {
 		console.error(`Other error: ${err.stack||err}`);

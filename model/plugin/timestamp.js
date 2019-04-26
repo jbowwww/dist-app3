@@ -56,6 +56,21 @@ module.exports = function timestampSchemaPlugin(schema, options) {
 		return Q(this);
 	});
 
+	schema.method('latest', function() {
+		let ts = this._ts;
+		let latest = ts.updatedAt;
+		if (!latest || _ts.createdAt > latest) {
+			latest = _ts.createdAt;
+		}
+		if (!latest || _ts.checkedAt > latest) {
+			latest = _ts.checkedAt;
+		}
+		if (!latest || _ts.deletedAt > latest) {
+			latest = _ts.deletedAt;
+		}
+		return latest;
+	});
+
 	/* Returns true if the timestamps indicate this object is still current relative to given timestamp */
 	schema.method('hasUpdatedSince', function(timestamp) {
 		return (this._ts.updatedAt && (this._ts.updatedAt >= timestamp))

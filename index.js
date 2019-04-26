@@ -1,6 +1,6 @@
 
 "use strict";
-const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: true });
 const util = require('util');
 const _ = require('lodash');
@@ -14,7 +14,7 @@ const mongoose = require('mongoose');
 mongoose.Promise = Q;
 
 const app = require('./app.js');
-const Task = require('./Task.js');
+// const Task = require('./Task.js');
 const expressApp = require('./express-app.js');
 
 	// const FileSys = require('./model/filesys');
@@ -25,7 +25,9 @@ const expressApp = require('./express-app.js');
 	const Audio = require('./model/audio.js');
 
 var searches = [
-	{ path: '/mnt/media', maxDepth: 0 }
+	// { path: '/mnt/media', maxDepth: 0 },
+	// { path: '/mnt/mystuff', maxDepth: 0 }
+		{ path: '/mnt/Stor2/mystuff', maxDepth: 0 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
@@ -114,18 +116,19 @@ function getAllSubdocs(topDoc) {
 		await app.dbConnect();
 		// console.verbose(`Disk.findOrPopulate.name=${Disk.findOrPopulate.name} Disk.findOrPopulate.length=${Disk.findOrPopulate.length}`);
 
-		await new Task(function diskPopulate() { return Disk.findOrPopulate(); }).run();
+		await Disk.findOrPopulate();
 
 		// debugger;
 		await pMap(searches, async search => {	// do i need this to be async when i return an await'ed value ? can i just directly return the promise?
 			// await new Task(async function fsSearch(task) {
 				// for await (let f of /*task.trackProgress*/Task.parallel({ concurrency: 2 }, (fsIterate(search)))) {
 				for await (let f of /*task.trackProgress*/(fsIterate(search))) {
-					await new Task(async function fSEntry(/*f*/) {
-						f = await FsEntry.findOrCreate(f); 	// maybe don't need due to bulkSave() using upsert? how about save()? how about relationships?
-						console.log(`f.path: '${f.path}', f.subdocs['${typeof f}' ${f.constructor.name} ${f.constructor.modelName}]=${inspect(getAllSubdocs(f))}`);
-						await (f.fileType === 'dir' ? f.save() : f.bulkSave({ maxBatchSize: 20,	batchTimeout: 1250 }));
-					}).run();
+					// await new Task(async function fSEntry(/*f*/) {
+						(await FsEntry.findOrCreate(f)).getArtefact(async a => {
+							// console.log(`a.fs.path: '${a.fs.path}' a=${inspect(a)}`);//, f.subdocs['${typeof f}' ${f.constructor.name} ${f.constructor.modelName}]=${inspect(getAllSubdocs(f))}`);
+							await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 }));
+						});
+					// }).run();
 					// console.verbose(`task=${inspect(task)}`);
 				}
 			});//.run());
