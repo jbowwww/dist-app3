@@ -31,24 +31,26 @@ const { job, start, stop } = require("microjob");
 (async function main() {
 	try {
 		let processedFiles = 0;
-		const processFile = new Queue(async function (f, cb) { 
-		  	const res = await job(async function processFile(f) {
-				console.verbose(`processFile#${processedFiles++} '${f.path || '(undef)'}'`);
+		const q = new Queue(async function (fId, cb) { 
+		  	job(async function processFile() {
+				// console.verbose(`processFile#${processedFiles++} '${f.path || '(undef)'}'`);
+				const f = await File.findById(fId);
 				if (f) {
 					await f.getArtefact(async a => {	// const a = await f.getArtefact();
 						if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
-							try {
+							// try {
 								await a.file.doHash();
 								await a.bulkSave();
-							} catch (e) {
-								console.warn(`error on file '${a.file.path}': ${e.stack||e}`);
-							}
+							// } catch (e) {
+								// console.warn(`error on file '${a.file.path}': ${e.stack||e}`);
+							// }
 						}
 					});
 				}
-			}, { ctx: File, Dir, FsEntry });
-		  	cb(null, res);
-		}).push;
+			}, { ctx: { File, Dir, FsEntry, processedFiles }}).then(res => cb(null, res));
+		  	// cb(null, res);
+		});
+		const processFile = q.push.bind(q);
 		
 		await start();
 		await app.dbConnect();
@@ -59,7 +61,7 @@ const { job, start, stop } = require("microjob");
 		let cursor = File.find({ hash: { $exists: false } }, null, { batchSize: 2, noCursorTimeout: true }).cursor();
 		// cursor;
 		for await (const f of cursor) {
-			/*await*/ processFile(f);
+			await processFile(f._id);
  		}
 		// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
 		// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
@@ -68,7 +70,7 @@ const { job, start, stop } = require("microjob");
 		// really do want to process both)
 		await pEvent(
 			fileWatch
-			.on('change', async change => await processFile(await File.findById(change.documentKey._id))) 
+			.on('change', async change => await processFile(/*	*/(change.documentKey._id))) 
 			.on('error', error => {	console.error(`EE error: ${err.stack||err}`); }),
 			{ resolutionEvents: [ 'end' ] }
 		);
