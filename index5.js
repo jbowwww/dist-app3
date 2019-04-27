@@ -25,18 +25,42 @@ const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
 // const Artefact = require('./Artefact.js');
+var Queue = require('better-queue');
+const { job, start, stop } = require("microjob");
 
 (async function main() {
 	try {
+		let processedFiles = 0;
+		const processFile = new Queue(async function (f, cb) { 
+		  	const res = await job(async function processFile(f) {
+				console.verbose(`processFile#${processedFiles++} '${f.path || '(undef)'}'`);
+				if (f) {
+					await f.getArtefact(async a => {	// const a = await f.getArtefact();
+						if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
+							try {
+								await a.file.doHash();
+								await a.bulkSave();
+							} catch (e) {
+								console.warn(`error on file '${a.file.path}': ${e.stack||e}`);
+							}
+						}
+					});
+				}
+			}, { ctx: File, Dir, FsEntry });
+		  	cb(null, res);
+		}).push;
 		
+		await start();
 		await app.dbConnect();
 		
-		const fileWatch = (FsEntry.watch([], { /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
+		const fileWatch = (FsEntry.watch([], { batchSize: 2 /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
 		console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
 
-		for await (const f of File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor()) {
-			await processFile(f)
-		}
+		let cursor = File.find({ hash: { $exists: false } }, null, { batchSize: 2, noCursorTimeout: true }).cursor();
+		// cursor;
+		for await (const f of cursor) {
+			/*await*/ processFile(f);
+ 		}
 		// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
 		// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
 		// hence creating 2 distinct audio objects and saving them both. Add some sort of queue, or keep track of currently processing
@@ -51,17 +75,21 @@ const Audio = require('./model/audio.js');
 
 		console.log(`done watching`);
 
-		async function processFile(f) {
-			console.debug(`f = ${inspect(f)}`);
-			if (f) {
-				await f.getArtefact(async a => {	// const a = await f.getArtefact();
-					if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
-						await a.file.doHash();
-						await a.bulkSave();
-					}
-				});
-			}
-		}
+		// async function processFile(f) {
+		// 	console.debug(`f = ${inspect(f)}`);
+		// 	if (f) {
+		// 		await f.getArtefact(async a => {	// const a = await f.getArtefact();
+		// 			if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
+		// 				try {
+		// 					await a.file.doHash();
+		// 					await a.bulkSave();
+		// 				} catch (e) {
+		// 					console.warn(`error on file '${a.file.path}': ${e.stack||e}`);
+		// 				}
+		// 			}
+		// 		});
+		// 	}
+		// }
 
 	} catch (err) {
 		console.error(`Other error: ${err.stack||err}`);
