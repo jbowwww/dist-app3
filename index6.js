@@ -4,7 +4,7 @@
  */
 
 "use strict";
-const console = require('./stdio.js').Get('index5', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('index6', { minLevel: 'verbose' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q');
@@ -15,6 +15,7 @@ const pEvent = require('p-event');
 // const pMap = require('p-map');
 
 const app = require('./app.js');
+const formatSizes = require('./format-sizes.js');
 // const Task = require('./Task.js');
 // const expressApp = require('./express-app.js');
 
@@ -31,41 +32,43 @@ const Audio = require('./model/audio.js');
 		
 		await app.dbConnect();
 		
-		const fileWatch = (FsEntry.watch([], { /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
-		console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
+		let totals = {
+			groupCount: 0,
+			fileCount: 0,
+			totalSize: 0,
+			totalGroupSize: 0
+		};
 
-		for await (const f of File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor()) {
-			await processFile(f)
-		}
-		// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
-		// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
-		// hence creating 2 distinct audio objects and saving them both. Add some sort of queue, or keep track of currently processing
-		// files, or something, or just process insert OR update (although that is not the right long-term soilution, since you
-		// really do want to process both)
-		await pEvent(
-			fileWatch
-			.on('change', async change => await processFile(await File.findById(change.documentKey._id))) 
-			.on('error', error => {	console.error(`EE error: ${err.stack||err}`); }),
-			{ resolutionEvents: [ 'end' ] }
-		);
-
-		console.log(`done watching`);
+		let cursor = await File.aggregate([		 /* , path: /^\/mnt\/wheel\/Trapdoor\/media\/.*$/ } */
+			{ $match: { hash: { $exists : 1 }, deletedAt: { $exists: 0 }, 'stats.size': { $gt: 1024*1024 } } },
+			{ $group : { '_id':{'size': '$stats.size', 'hash': '$hash'}, paths: { $push: "$path" }, groupSize: { $sum: "$stats.size" }, count: { $sum: 1 } } },
+			{ $match: { count: { $gt: 1 } } }
+		]).cursor({ batchSize: 20 }).exec();
+		console.verbose(`cursor = ${inspect(cursor)} + \n${_.functions(cursor).join(', ')}`);
+		await cursor.eachAsync(processFile)
 
 		async function processFile(f) {
-			console.debug(`f = ${inspect(f)}`);
-			if (f) {
-				try {
-					await f.getArtefact(async a => {	// const a = await f.getArtefact();
-						if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
-							await a.file.doHash();
-							await a.bulkSave();
-						}
-					});
-				} catch (e) {
-					console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
-				}
-			}
+			totals.groupCount++;
+			totals.fileCount += f.count;
+			totals.totalSize += f._id.size;
+			totals.totalGroupSize += f.groupSize;
+
+			console.log(`f = ${inspect(f)}`);
+			// if (f) {
+			// 	try {
+			// 		await f.getArtefact(async a => {	// const a = await f.getArtefact();
+			// 			if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
+			// 				await a.file.doHash();
+			// 				await a.bulkSave();
+			// 			}
+			// 		});
+			// 	} catch (e) {
+			// 		console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
+			// 	}
+			// }
 		}
+
+		console.log(`totals = ${inspect(formatSizes(totals))}`);
 
 	} catch (err) {
 		console.error(`Other error: ${err.stack||err}`);
