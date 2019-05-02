@@ -58,11 +58,29 @@ const { job, start, stop } = require("microjob");
 		const fileWatch = (FsEntry.watch([], { batchSize: 2 /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
 		console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
 
+<<<<<<< Updated upstream
 		let cursor = File.find({ hash: { $exists: false } }, null, { batchSize: 2, noCursorTimeout: true }).cursor();
 		// cursor;
 		for await (const f of cursor) {
 			await processFile(f._id);
  		}
+=======
+		const MAX_CONCURRENT = 4;
+		let concurrent = 0;
+		let processingPromises = [];
+		for await (const f of File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor()) {
+			if (concurrent < MAX_CONCURRENT) {
+				processingPromises[concurrent++] = processFile(f).finally(() => processingPromises[concurrent--] = null );
+			} else {
+				for (let p of processingPromises) {
+					if (!!p) {
+						await p;
+						break;
+					}
+				}
+			}
+		}
+>>>>>>> Stashed changes
 		// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
 		// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
 		// hence creating 2 distinct audio objects and saving them both. Add some sort of queue, or keep track of currently processing
