@@ -54,16 +54,16 @@ const Audio = require('./model/audio.js');
 		async function processFile(f) {
 			console.debug(`f = ${inspect(f)}`);
 			if (f) {
-				try {
+				// try {
 					await f.getArtefact(async a => {	// const a = await f.getArtefact();
-						if (a.file && (!a.file.hash || !a.file.stats || (a.file.stats.mtime && !a.file.isCheckedSince(a.file.stats.mtime)))) {
+						if (a.file) {
 							await a.file.doHash();
 							await a.bulkSave();
 						}
 					});
-				} catch (e) {
-					console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
-				}
+				// } catch (e) {
+				// 	console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
+				// }
 			}
 		}
 
