@@ -1,4 +1,4 @@
-
+"use strict";
 const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
@@ -8,6 +8,7 @@ Q.longStackSupport = true;
 const mongoose = require('mongoose');
 // mongoose.set('debug', true);
 const { /*promisePipe,*/ artefactDataPipe, chainPromiseFuncs, iff, tap } = require('../../promise-pipe.js');
+const Artefact = require('../../Artefact.js');
 
 console.verbose(`artefact.js tap: ${tap} iff: ${iff}`);
 	const _artefacts = {b:2 };//new WeakMap();
@@ -25,8 +26,18 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 	});
 	// schema.virtual('_artefact');
 
-	/* Find a _meta document from the given model(table)
-	 * */
+	// Dont think going to use this ultimately. Original thought was to allow syntax like Artefact.File.findOrCreate()
+	// but why not just use [new] Artefact(File.findOrCreate())
+	// or if declaring/building pipelines using arrays of funcs, instead of manually writing pipelines, use Artefact(File.findOrCreate)
+	// schema.on('init', function(model) {
+	// 	Artefact[model.modelName] = model;
+	// });\
+	// schema.static('Artefact', function )
+
+	/* Get an artefact associated with a given document. It is an object comprised of documents, indexed by model name.
+	 * Currently creates a new object on each call. Probably actually want to use a WeakMap to cache artefact objects already created.
+	 * Should I make an Artefact class/ctor&proto instead of constructing an object literal like I currently am? Quite possibly
+	 */
 	schema.method('getArtefact', async function getArtefact(options = {}, cb) {
 		
 		if (typeof options === 'function') {
