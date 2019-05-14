@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'verbose' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'debug' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const _ = require('lodash');
@@ -81,6 +81,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 			return Q(promisePipe(meta));
 		}
 
+		let a;	// instead of Obkject.create use Artefact? 
 		try {
 	
 			a = Object.create({
@@ -179,7 +180,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 				 // })
 		} catch (e) {
 			console.warn(`getArtefact error: ${e.stack||e}`);
-			docModel._stats.errors.push(e);
+			// docModel._stats.errors.push(e);
 		} return a;	
 	});
 

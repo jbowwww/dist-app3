@@ -4,7 +4,7 @@
  */
 
 "use strict";
-const console = require('./stdio.js').Get('index5', { minLevel: 'verbose' });	// debug verbose log
+const console = require('./stdio.js').Get('index5', { minLevel: 'debug' });	// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const _ = require('lodash');
 const Q = require('q');
@@ -34,36 +34,44 @@ const Audio = require('./model/audio.js');
 		const fileWatch = (FsEntry.watch([], { /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
 		console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
 
-		for await (const f of File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor()) {
-			await processFile(f)
-		}
+		// for await (const f of 
+		await File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor().eachAsync(processFile);
+		//  {
+		// 	await processFile(f)
+		// }
 		// TODO: It seems this is creating 2x audios for each fs(file) object. I think because watch() sees 2 events per file,
 		// an insert and an update, in quick succession, so it gets both before either has finished processing the below logic,
 		// hence creating 2 distinct audio objects and saving them both. Add some sort of queue, or keep track of currently processing
 		// files, or something, or just process insert OR update (although that is not the right long-term soilution, since you
 		// really do want to process both)
-		await pEvent(
-			fileWatch
-			.on('change', async change => await processFile(await File.findById(change.documentKey._id))) 
-			.on('error', error => {	console.error(`EE error: ${err.stack||err}`); }),
-			{ resolutionEvents: [ 'end' ] }
-		);
+		// await pEvent(
+		// 	fileWatch
+		// 	.on('change', async change => await processFile(await File.findById(change.documentKey._id))) 
+		// 	.on('error', error => {	console.error(`EE error: ${err.stack||err}`); }),
+		// 	{ resolutionEvents: [ 'end' ] }
+		// );
 
 		console.log(`done watching`);
 
-		async function processFile(f) {
-			console.debug(`f = ${inspect(f)}`);
+		async function processFile(/*err,*/f) {
+			// if (err) {
+			// 	console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
+			// 	return;
+			// }
+			// console.debug(`f = ${inspect(f)}`);
 			if (f) {
-				// try {
+				try {
 					await f.getArtefact(async a => {	// const a = await f.getArtefact();
+						console.debug(`a = ${inspect(a)}`);
 						if (a.file) {
 							await a.file.doHash();
-							await a.bulkSave();
+						console.debug(`a2 = ${inspect(a)}`);
+							await a.save();
 						}
 					});
-				// } catch (e) {
-				// 	console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
-				// }
+				} catch (e) {
+					console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
+				}
 			}
 		}
 

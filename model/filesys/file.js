@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
 const hashFile = require('../../fs/hash.js');
@@ -44,16 +44,15 @@ file.method('doHash', function doHash(forceRehash = false) {
 	var file = this;
 	var model = this.constructor;
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
-	// console.verbose(`${debugPrefix}.doHash: model=${inspect(model, { compact: false })}`);
+	console.verbose(`${debugPrefix}.doHash: file=${inspect(file, { compact: false })} forceRehash=${forceRehash}`);
 	// some way to abstract/automate these basic stats for all methods? e.g. if isNew then create++, isModified then update++ else check++
 	model._stats.doHash.calls++;
-	return (forceRehash || (!file.hash || !file.stats || (file.stats.mtime && !file.isCheckedSince(file.stats.mtime))))
-	 ?	Q((() => {
-	 		model._stats.doHash.success++;
-			model._stats.doHash.check++
-			return file;
-		})())
-	 : 	hashFile(file.path).then((hash) => {
+	if (!forceRehash && file.hash && file.stats && file.stats.mtime && file.isCheckedSince(file.stats.mtime)) {
+ 		model._stats.doHash.success++;
+		model._stats.doHash.check++
+		return new Promise(file);
+	} else {
+		return hashFile(file.path).then((hash) => {
 			model._stats.doHash.success++;
 			if (!file.hash) { model._stats.doHash.create++; }
 			else { model._stats.doHash.update++; }
@@ -66,8 +65,9 @@ file.method('doHash', function doHash(forceRehash = false) {
 			console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
 			// return file;	// should i really actually be catching an err then returning file like nothing happened??
 			// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
-			throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
+			// throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
 		});
+	}
 });
 
 file.query.hasHash = function() { return this.exists('hash'); };
