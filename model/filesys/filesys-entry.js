@@ -76,7 +76,10 @@ fsEntry.post('construct', function doCreate(doc, next) {
 	// console.verbose(`[model ${model.modelName}].post('construct'): doCreateLevel=${doCreateLevel}(high=${doCreateLevelHigh}) disks.count=${mongoose.model('disk').count()}, partitions.count=${mongoose.model('partition').count()}\nfs.isNew=${doc.isNew} doc.isModified()=${doc.isModified()} doc.fileType='${doc.fileType}' doc=${inspect(doc)})\n`);
 	
 	// TODO: Query helper method that caches queries - e.g. Dir.findOne({ path: '...' }).useCache().then(dir => { })
-	// TODO: useCache() not working, seems to be responsible fo rmost fs entries having undefined or null dir and partition members
+	// TODO: useCache() not working, seems to be responsible fo rmost fs entries having undefined or null dir and partition members'
+	// TODO: Try mongoose-redis-cache(should be ok with being a query.lean() as required, as doesn't call doc instance methods
+	// TODO: Could ALso be optimised aside from the cache, Partition.find() and maybe subsequent _.find can be executed in parallel
+	// using Promise.all(). Could store Partiton.find({}) once and reuse for TTL or indefinitely (effectively a cache of partitions only)
 	return Q(doc.dir || Dir/*.find()*/.findOne({ path: nodePath.dirname(doc.path) })/*.useCache()*/
 	.then(dir => dir ? _.assign(doc, { dir: dir._id, partition: dir.partition ? dir.partition._id : undefined }) :
 		Partition.find({})/*.useCache()*/.then(partitions => _.find( _.reverse( _.sortBy( 
