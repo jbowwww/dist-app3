@@ -66,7 +66,7 @@ disk.static('findOrPopulate', async function findOrPopulate(task) {
 		await null;
 	} catch (e) {
 		console.error(`disk.findOrPopulate: error: ${e.stack||e}`);
-		model._stats.findOrPopulate.errors.push(err);
+		model._stats.findOrPopulate.errors.push(e);
 		// throw e;
 	}
 
