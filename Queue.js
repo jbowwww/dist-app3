@@ -1,64 +1,96 @@
 
-const console = require('./stdio.js').Get('index', { minLevel: 'log' });	// debug verbose log
+const console = require('./stdio.js').Get('Queue', { minLevel: 'verbose' });// debug verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: true });
 const util = require('util');
 const { EventEmitter } = require('events');
 
-function MyQueue(concurrency = 1) {
-	if (!(this instanceof MyQueue)) {
-		return new MyQueue(concurrency);
+util.inherits(Queue, EventEmitter);
+Queue.prototype.constructor = Queue;
+
+function Queue(concurrency = 1) {
+	if (!(this instanceof Queue)) {
+		return new Queue(concurrency);
 	}
 	EventEmitter.call(this);
 	this.queue = [];
 	this.activeCount = 0;
 	this.runCount = 0;
+	this.successCount = 0;
+	this.errors = [];
 	this.concurrency = concurrency;
 }
 
-util.inherits(MyQueue, EventEmitter);
-MyQueue.prototype.constructor = MyQueue;
+Queue.prototype._debug = function _debug() {
+	return JSON.stringify({
+		'queue.length': this.queue.length,
+		concurrency: this.concurrency,
+		activeCount: this.activeCount,
+		runCount: this.runCount,
+		successCount: this.successCount,
+		'errors.length': this.errors.length
+	});
+};
 
-MyQueue.prototype.add = function add(fn, ...args) {
+Queue.prototype.add = function add(fn, ...args) {
 	const queue = this.queue;
 	const next = () => {
 		this.activeCount--;
 		if (queue.length > 0) {
-			console.log(`Dequeueing task : this.activeCount = ${this.activeCount} this.concurrency = ${this.concurrency} this.queue.length = ${this.queue.length} this.runCount = ${this.runCount}`);
+			console.verbose(`Dequeueing task : ${this._debug()}`);
 			if (queue.length === 1) {
-				console.log(`Queue empty : this.activeCount = ${this.activeCount} this.concurrency = ${this.concurrency} this.queue.length = ${this.queue.length} this.runCount = ${this.runCount}`);
+				console.verbose(`Queue empty : ${this._debug()}`);
 				this.emit('empty');
 			}
 			const r = queue.shift()();
 		} else {
-			console.log(`Queue idle : this.activeCount = ${this.activeCount} this.concurrency = ${this.concurrency} this.queue.length = ${this.queue.length} this.runCount = ${this.runCount}`);
+			console.verbose(`Queue idle : ${this._debug()}`);
 			this.emit('idle');
 		}
 	};
-
 	const run = (fn, ...args) => {
+		const runStart = Date.now();
+		let runEnd;
 		this.activeCount++;
 		this.runCount++;
-		console.log(`Running task : this.activeCount = ${this.activeCount} this.concurrency = ${this.concurrency} this.queue.length = ${this.queue.length} this.runCount = ${this.runCount}`);
-		return fn(...args).finally(process.nextTick(next));//resolve, reject).finally(next);
+		console.log(`Running task : ${this._debug()}`);
+		return (fn(...args)
+		.then(result => {
+			runEnd = Date.now();
+			const runDuration = runEnd - runStart;
+			this.successCount++;
+			console.verbose(`Task success : result=${inspect(result)} runDuration=${runDuration}ms ${this._debug()}`);
+		}, err => {
+			runEnd = Date.now();
+			const runDuration = runEnd - runStart;
+			this.errorCount++;
+			console.verbose(`Task error : err=${err.stack||err} runDuration=${runDuration}ms ${this._debug()}`);
+		}).then(() => process.setTimeout(next, 0)));
 	};
-
 	if (this.activeCount < this.concurrency) { 
 		run(fn, ...args);
 	} else {
-		console.log(`Queueing task : this.activeCount = ${this.activeCount} this.concurrency = ${this.concurrency} this.queue.length = ${this.queue.length} this.runCount = ${this.runCount}`);
+		console.verbose(`Queueing task : ${this._debug()}`);
 		this.queue.push(() => run(fn, ...args));
 	}
 };
-MyQueue.prototype.enqueue = MyQueue.prototype.add;
+Queue.prototype.enqueue = Queue.prototype.add;
 
-MyQueue.prototype.onEmpty = function onEmpty() {
-	return new Promise((resolve, reject) => {
-		this.once('empty', resolve);
+Queue.prototype.onEmpty = function onEmpty() {
+	return this.queue.length === 0 ? Promise.resolve() : new Promise((resolve, reject) => {
+		this.on('empty', () => {
+			this.off('enpty');
+			this.resolve();
+		})
 	});
 };
 
-MyQueue.prototype.onIdle = function onIdle() {
-	return new Promise((resolve, reject) => {
-		this.once('idle', resolve);
+Queue.prototype.onIdle = function onIdle() {
+	return this.activeCount === 0 ? Promise.resolve() : new Promise((resolve, reject) => {
+		this.on('idle', () => {
+			this.off('idle');
+			this.resolve();
+		});
 	});
 };
+
+module.exports = Queue;

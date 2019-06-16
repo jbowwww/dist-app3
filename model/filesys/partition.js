@@ -2,11 +2,9 @@
 const console = require('../../stdio.js').Get('model/filesys/partition', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });
-const { promisifyMethods } = require('../../utility.js');
 const util = require('util');
 const _ = require('lodash');
 const Q = require('q');
-const hashFile = require('../../fs/hash.js');
 const mongoose = require('mongoose');
 
 let partition = new mongoose.Schema({

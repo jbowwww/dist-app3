@@ -26,6 +26,11 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 	});
 	// schema.virtual('_artefact');
 
+	schema.query.asArtefact = async function asArtefact(options = {})
+	{
+		return this.exec().map(a => a.getArtefact)
+	};
+
 	// Dont think going to use this ultimately. Original thought was to allow syntax like Artefact.File.findOrCreate()
 	// but why not just use [new] Artefact(File.findOrCreate())
 	// or if declaring/building pipelines using arrays of funcs, instead of manually writing pipelines, use Artefact(File.findOrCreate)

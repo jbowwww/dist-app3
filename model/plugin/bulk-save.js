@@ -43,7 +43,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 					return Q(doc);
 				}
 				var deferred = Q.defer();
-				model._bulkSave.push({ doc, deferred, opIndex: model._bulkSave.length });
+				model._bulkSave.push({ doc, deferred, /*opIndex: model._bulkSave.length*/ });
 				if (model._bulkSave.length >= options.maxBatchSize) {
 					innerBulkSave();
 				} else if (!model._bulkSaveTimeout) {
@@ -58,7 +58,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 					model._bulkSave = [];
 					if (model._bulkSaveTimeout) {
 						clearTimeout(model._bulkSaveTimeout);
-						delete model._bulkSaveTimeout;
+						model._bulkSaveTimeout = false;
 					}
 
 					var bulkOps = _.map(bs, bsDoc => ({

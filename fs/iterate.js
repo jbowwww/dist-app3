@@ -117,7 +117,7 @@ async function* iterate(options) {
 	function nextHandleError(err) {
 		options.handleError(err);
 		self.errors.push(err);
-		console.warn(`iterate('${self.root}'): ${err.stack|err}`);
+		console.warn(`iterate('${self.root}'): ${err.stack||err}`);
 		// process.nextTick(() =>
 		 // self.emit('error', err);
 		 // );
