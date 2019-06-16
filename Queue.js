@@ -31,10 +31,14 @@ Queue.prototype._debug = function _debug() {
 	});
 };
 
+// Runs a function, up to the configured concurrency. If maximum concurrency not yet reached, add returns immediately. If maximum concurrency
+// has been reached, returns a Promise that resolves when one of the currently executing functions finishes.
+// TODO: ^ think that through, i'm not sure its quite what you want
 Queue.prototype.add = function add(fn, ...args) {
 	const queue = this.queue;
 	const next = () => {
 		this.activeCount--;
+		this.emit('next');
 		if (queue.length > 0) {
 			console.verbose(`Dequeueing task : ${this._debug()}`);
 			if (queue.length === 1) {
@@ -71,6 +75,12 @@ Queue.prototype.add = function add(fn, ...args) {
 	} else {
 		console.verbose(`Queueing task : ${this._debug()}`);
 		this.queue.push(() => run(fn, ...args));
+		return new Promise((resolve, reject) => {
+			this.on('next', () => {
+				this.off('next');
+				resolve();
+			});
+		})
 	}
 };
 Queue.prototype.enqueue = Queue.prototype.add;
@@ -79,7 +89,7 @@ Queue.prototype.onEmpty = function onEmpty() {
 	return this.queue.length === 0 ? Promise.resolve() : new Promise((resolve, reject) => {
 		this.on('empty', () => {
 			this.off('enpty');
-			this.resolve();
+			resolve();
 		})
 	});
 };
@@ -88,7 +98,7 @@ Queue.prototype.onIdle = function onIdle() {
 	return this.activeCount === 0 ? Promise.resolve() : new Promise((resolve, reject) => {
 		this.on('idle', () => {
 			this.off('idle');
-			this.resolve();
+			resolve();
 		});
 	});
 };

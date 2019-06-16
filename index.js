@@ -41,11 +41,11 @@ var searches = [
 		await pMap(searches, async search => {
 			const queue = new Queue(4); // tried PQueue and PLimit previously but wanted to write my own (lack of dependencies on random npm packages, & other npm packages are often missing critical or desired feature or option 
 			for await (let f of (fsIterate(search))) {
-				// queue.add(async function() {
+				await queue.add(async function() {
 					(await FsEntry.findOrCreate(f)).getArtefact(async a => {
 						await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 }));
 					});
-				// });
+				});
 			}
 			await queue.onIdle();
 		});
