@@ -13,6 +13,7 @@ function Queue(concurrency = 1) {
 	}
 	EventEmitter.call(this);
 	this.queue = [];
+	this.maxQueueCount = 0;
 	this.activeCount = 0;
 	this.runCount = 0;
 	this.successCount = 0;
@@ -23,6 +24,7 @@ function Queue(concurrency = 1) {
 Queue.prototype._debug = function _debug() {
 	return JSON.stringify({
 		'queue.length': this.queue.length,
+		maxQueueCount: this.maxQueueCount,
 		concurrency: this.concurrency,
 		activeCount: this.activeCount,
 		runCount: this.runCount,
@@ -35,18 +37,19 @@ Queue.prototype._debug = function _debug() {
 // has been reached, returns a Promise that resolves when one of the currently executing functions finishes.
 // TODO: ^ think that through, i'm not sure its quite what you want
 Queue.prototype.add = function add(fn, ...args) {
-	const queue = this.queue;
+	// const queue = queue;
 	const next = () => {
 		this.activeCount--;
 		this.emit('next');
-		if (queue.length > 0) {
+		if (this.queue.length > 0) {
 			console.verbose(`Dequeueing task : ${this._debug()}`);
-			if (queue.length === 1) {
+			const task = this.queue.shift();
+			if (this.queue.length === 0) {
 				console.verbose(`Queue empty : ${this._debug()}`);
 				this.emit('empty');
 			}
-			const r = queue.shift()();
-		} else {
+			const r = task();	// should always return undefined
+		} else if (this.activeCount === 0) {
 			console.verbose(`Queue idle : ${this._debug()}`);
 			this.emit('idle');
 		}
@@ -64,20 +67,25 @@ Queue.prototype.add = function add(fn, ...args) {
 			this.successCount++;
 			console.verbose(`Task success : result=${inspect(result)} runDuration=${runDuration}ms ${this._debug()}`);
 		}, err => {
+			this.activeCount--;
 			runEnd = Date.now();
 			const runDuration = runEnd - runStart;
-			this.errorCount++;
-			console.verbose(`Task error : err=${err.stack||err} runDuration=${runDuration}ms ${this._debug()}`);
-		}).then(() => process.setTimeout(next, 0)));
+			this.errors.push(err);
+			console.warn(`Task error : err=${err.stack||err} runDuration=${runDuration}ms ${this._debug()}`);
+		})
+		.then(() => /*process.*/setTimeout(next, 0)));
 	};
 	if (this.activeCount < this.concurrency) { 
 		run(fn, ...args);
 	} else {
 		console.verbose(`Queueing task : ${this._debug()}`);
 		this.queue.push(() => run(fn, ...args));
+		if (this.queue.length > this.maxQueueCount) {
+			this.maxQueueCount = this.queue.length;
+		}
 		return new Promise((resolve, reject) => {
-			this.on('next', () => {
-				this.off('next');
+			this.once('next', () => {
+				// this.off('next');
 				resolve();
 			});
 		})
@@ -87,8 +95,8 @@ Queue.prototype.enqueue = Queue.prototype.add;
 
 Queue.prototype.onEmpty = function onEmpty() {
 	return this.queue.length === 0 ? Promise.resolve() : new Promise((resolve, reject) => {
-		this.on('empty', () => {
-			this.off('enpty');
+		this.once('empty', () => {
+			// this.off('enpty');
 			resolve();
 		})
 	});
@@ -96,8 +104,8 @@ Queue.prototype.onEmpty = function onEmpty() {
 
 Queue.prototype.onIdle = function onIdle() {
 	return this.activeCount === 0 ? Promise.resolve() : new Promise((resolve, reject) => {
-		this.on('idle', () => {
-			this.off('idle');
+		this.once('idle', () => {
+			// this.off('idle');
 			resolve();
 		});
 	});
