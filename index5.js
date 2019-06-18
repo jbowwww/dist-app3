@@ -12,11 +12,23 @@ const hashFile = require('./fs/hash.js');
 const mongoose = require('mongoose');	
 mongoose.Promise = Q;
 const pEvent = require('p-event');
-// const pMap = require('p-map');
+const pMap = require('p-map');
+const { DataStream } = require('scramjet');
 
 const app = require('./app.js');
 // const Task = require('./Task.js');
 // const expressApp = require('./express-app.js');
+
+class EventTranslate extends require('stream').Readable {
+	constructor(source, event) {
+		super({ objectMode: true });
+		source.on(event, data => { this.push(data); });
+	}
+	_read() {}
+	_destroy() {
+		source.off(event);
+	}
+}
 
 // const FileSys = require('./model/filesys');
 const Disk = require('./model/filesys/disk.js');
@@ -32,10 +44,24 @@ const Audio = require('./model/audio.js');
 		await app.dbConnect();
 		
 		const fileWatch = (FsEntry.watch([], { /*fullDocument: 'updateLookup'*/ }/*, 'change'*/));		
-		console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
+		// console.debug(`fileWatch=${inspect(fileWatch)} funcs=${_.functionsIn(fileWatch).join(', ')}`);
 
 		// for await (const f of 
-		await File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor().eachAsync(processFile);
+		const fileFind = File.find({ hash: { $exists: false } }, null, { batchSize: 2 }).cursor();//.eachAsync(processFile);
+
+		// await /*pMap*/([/*fileWatch*/ fileFind].map((source, sourceIndex) => {
+		// 	console.debug(`source[${sourceIndex}]=${inspect(source)} funcs=${_.functionsIn(source).join(', ')}`);
+			await Promise.all([
+				DataStream.from(fileFind)
+					.map(processFile)
+					.run(),
+				DataStream.from(new EventTranslate(fileWatch, 'change'))
+					.map(async change => await File.findById(change.documentKey._id))
+					.map(processFile)
+					.run()
+				]);
+		// }));
+
 		//  {
 		// 	await processFile(f)
 		// }
@@ -58,7 +84,7 @@ const Audio = require('./model/audio.js');
 			// 	console.warn(`error on file '${f.path||'(undef)'}': ${e.stack||e}`);
 			// 	return;
 			// }
-			// console.debug(`f = ${inspect(f)}`);
+			console.debug(`f = ${inspect(f)}`);
 			if (f) {
 				try {
 					await f.getArtefact(async a => {	// const a = await f.getArtefact();

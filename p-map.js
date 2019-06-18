@@ -1,0 +1,1 @@
+module.exports = (pArray, pFunc) => Promise.all(pArray.map(pFunc));

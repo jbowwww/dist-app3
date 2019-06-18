@@ -50,7 +50,7 @@ file.method('doHash', function doHash(forceRehash = false) {
 	if (!forceRehash && file.hash && file.stats && file.stats.mtime && file.isCheckedSince(file.stats.mtime)) {
  		model._stats.doHash.success++;
 		model._stats.doHash.check++
-		return new Promise(file);
+		return /*new Promise*/(file);
 	} else {
 		return hashFile(file.path).then((hash) => {
 			model._stats.doHash.success++;
@@ -65,7 +65,7 @@ file.method('doHash', function doHash(forceRehash = false) {
 			console.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
 			// return file;	// should i really actually be catching an err then returning file like nothing happened??
 			// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
-			// throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
+			throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
 		});
 	}
 });

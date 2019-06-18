@@ -5,8 +5,8 @@ const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0
 const util = require('util');
 const { EventEmitter } = require('events');
 
-// const pMap = require('p-map');
-const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
+const pMap = require('p-map');
+// const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
 // const pAll = require('p-all');
 const Queue = require('./Queue.js');
 // const hashFile = require('./fs/hash.js');
