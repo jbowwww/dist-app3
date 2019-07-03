@@ -26,7 +26,7 @@ const Audio = require('./model/audio.js');
 
 // await (DataStream.from(aStream
 var searches = [
-	{ path: '/etc', maxDepth: 0 },
+	{ path: '/etc', maxDepth: 0 }
 	// { path: '/mnt/media', maxDepth: 0 },
 	// { path: '/mnt/mystuff', maxDepth: 0 }
 	// { path: '/mnt/Stor2/mystuff', maxDepth: 0 }
@@ -35,7 +35,7 @@ var searches = [
 
 (async function main() {
 	try {
-		console.verbose(`Queue = [${typeof Q}] ${Queue}`)
+		console.verbose(`Queue = [${typeof Q}] ${Queue}`);
 		await app.dbConnect();
 		await Disk.findOrPopulate();
 		await pMap(searches, async search => {

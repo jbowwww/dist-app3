@@ -135,5 +135,9 @@ file.aggregates = {
 };
 
 module.exports = FsEntry.discriminator('file', file);
+// FOllowing on from note in audio.js schema, this file would be more like (due to discriminator) :
+// module.exports = modelOptions => 
+// 	require('./schemas/fs/fs-entry.js')(modelOptions.baseModelOptions)
+// 	.discriminator(modelOptions.modelName || 'file', fileSchema);
 
 console.debug(`File: ${inspect(module.exports)}, File.prototype: ${inspect(module.exports.prototype)}`);

@@ -89,7 +89,7 @@ module.exports = function bulkSaveSchemaPlugin(schema, options) {
 						// var successOps = _.map(_.concat(upsertedIds, insertedIds), id => _.find(bs, bs => bs.doc._doc._id === id));
 						// var errorOps = _.difference(bs, successOps);
 						var successOps = bs;
-						var errorOps = [];
+						var errorOps = []; 
 						console.verbose(`[model ${model.modelName}].innerBulkSave(); successOps=${inspect(successOps)} errorOps=${inspect(errorOps)}`);
 						_.forEach(successOps, op => op.deferred.resolve(bulkWriteOpResult));
 						_.forEach(errorOps, op => op.deferred.reject(_.assign(new Error(`bulkWrite error for doc._id=${op.doc._doc._id}`), { bulkWriteOpResult })));

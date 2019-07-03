@@ -15,9 +15,15 @@ console.verbose(`artefact.js tap: ${tap} iff: ${iff}`);
 
 /* Standard/common schema methods, statics
  */
-module.exports = function artefactSchemaPlugin(schema, options) {
+module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 
-	console.debug(`artefactSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+
+	// NEW !@@
+	schema.method.FromTypes = function FromTypes(	ctorFunc) {
+		return ctorFunc(Artefact((this)));
+	};
+	
+	// console.debug(`artefactSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
 	schema.add({
 		// _artefact: { type: mongoose.SchemaTypes.Mixed, required: false, default: undefined },
@@ -25,6 +31,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 		_primaryType: { type: String, required: false/*true*/, default: undefined }
 	});
 	// schema.virtual('_artefact');
+
 
 	schema.query.asArtefact = async function asArtefact(options = {})
 	{
@@ -177,7 +184,7 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 			console.debug(`[model ${docModelName}].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);	
 
 			await Promise.all(_.map(allModels, modelName => a[modelName] ? a[modelName] : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)));
-			 console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>`'${mn}'`).join(', ')} ] a=${inspect(a, { compact: false })}`);
+			 console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>mn).join(', ')} ] a=${inspect(a, { compact: false })}`);
 			
 			await cb(a);
 			// console.debug(`_artefacts=${inspect(_artefacts)}`)
@@ -186,7 +193,8 @@ module.exports = function artefactSchemaPlugin(schema, options) {
 		} catch (e) {
 			console.warn(`getArtefact error: ${e.stack||e}`);
 			// docModel._stats.errors.push(e);
-		} return a;	
+		}
+		return a;	
 	});
 
 	schema.query.getArtefacts = function getArtefacts(...args) {
