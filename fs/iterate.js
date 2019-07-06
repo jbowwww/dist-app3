@@ -37,6 +37,12 @@ function createFsItem(path, stats) {
 	});
 }
 
+// TODO: Make this scan all FS entries under the path without slowing for back pressure, or perhaps only dirs, or dirs+files but not stat?
+// or just all three (dirs+files+stats) so it then has sizes.. and can calculate progress and estimate ETA. If not including stats, estimate
+// would be less accurate as don't know sizes of files so probably all 3
+// Whether this shgould be a generator func (async or not) or a stream, or otherwise (just a fn call returns object, fn args include the
+// data processing fn?) IDK .. but iterate should maintain an object with total numbers (+sizes if incl stats) of FS entries under path,
+// total processed, dirs/files counts and progress (raw and % virtual) and ETA
 async function* iterate(options) {
 	options = _.defaults(options, {
 		path: '.',
