@@ -61,10 +61,10 @@ var audioSchema = new mongoose.Schema({
 audioSchema.plugin(require('./plugin/standard.js'));
 audioSchema.plugin(require('./plugin/bulk-save.js'));
 
-audioSchema.,method.construct = function construct({ file }) {
+audioSchema.method.construct = function construct({ file }) {
 
 };
-audioSchema.plugin(require('./plugin/artefact.js'), { file }, ({ file }) => {
+audioSchema.plugin(require('./plugin/artefact.js'), [ 'file' ], ({ file }) => {
     if (file.path.match(/^[a-z]+.*\.[a-z]$/)) {
         return this.construct({ file }); 
     }

@@ -1,10 +1,15 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'verbose' });	// debug verbose log
-const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
+const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'debug' });	// console verbose log
+// const debug = require('debug')('fs/iterate.js');
+const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0, compact: false });
 const promisifyMethods = require('../utility.js').promisifyMethods;
 const util = require('util');
 const _ = require('lodash');
+const pMap = require('p-map');
+// const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
+// const pAll = require('p-all');
+const Queue = require('../Queue.js');
 const nodeFs = promisifyMethods(require('fs'));
 const nodePath = require('path');
 const stream = new require('stream');
@@ -17,7 +22,63 @@ const getDevices = require('./devices.js');
 const pathDepth = require('./path-depth.js');
 const { trace } = require('../Task.js');
 
-module.exports = /*trace*/({ createFsItem, iterate });
+module.exports = /*trace*/({ FsIterable, createFsItem, iterate });
+
+function FsIterable(options) {
+
+	if (!(this instanceof FsIterable)) {
+		return new FsIterable(options);
+	}
+
+	this.options = options = _.defaults(options, {
+		path: nodePath.resolve(options.path || '.'),
+		maxDepth: 1,
+		filter: item => true,
+		objectMode: true,
+		highWaterMark: 16,
+		handleError(err) { console.warn(`iterate: ${err/*.stack*/}`); }
+	});
+	this.root = options.path;
+	this.rootItem = null;
+	this.paths = [options.path];
+	this.count = {
+		file: 0,
+		dir: 0,
+		unknown: 0,
+		get all() { return this.file + this.dir + this.unknown; }
+	}
+	// this.count[util.inspect.custom] = () => inspect(Object.assign({}, this.count));
+	this.errors = [];
+	this.items = [];
+	this.items[util.inspect.custom] =  () => 'Array[' + this.items.length + ']';
+	this.itemIndex = 0;
+	this.done = false;
+
+	this[Symbol.asyncIterator] = () => this;
+	this.next = async () => {
+		const done = this.itemIndex >= this.items.length;
+		const r = {
+			value: this.done && done ? undefined : done ? await this.currentPromiseItem : this.items[this.itemIndex],
+			done: this.done && done
+		};  
+		this.itemIndex++;
+		return r;
+	};
+
+const iterable =iterate(options);
+	console.verbose(`FsIterate(${inspect(options, { compact: false })}): this=${inspect(this, { compact: false })} iterate=${typeof iterate} iterable=${inspect(iterable)}`);
+
+	(async () => {
+		for await(let currentPromiseItem of iterable) {
+			this.currentPromiseItem = currentPromiseItem;
+			const fsItem = await currentPromiseItem;
+			this.items.push(fsItem);
+			this.count[fsItem.fileType]++;
+		}
+		this.done = true; 
+	})();
+
+}
 
 // creates a POJO FS item to be used by iterate. Takes a path and returns an object containing path, stats, and fileType
 function createFsItem(path, stats) {
@@ -99,3 +160,39 @@ async function* iterate(options) {
 		console.debug(`iterate('${self.root}'): stream end`);
 	}
 }
+
+	// // for (let i = 0; i < this.paths.length; i++) { // as long as JS will re-evaluate this.paths.length each iteration? because this.paths continues growing
+	// (async function fsPath(path) {
+	// 	try {
+	// 		let prItem = nodeFs.lstat(path);
+	// 		this.items.push(prItem);
+	// 		var stats = await prItem;
+	// 		var item = createFsItem(path, stats);
+	// 		if (path === this.root) {
+	// 			this.rootItem = item;
+	// 		}
+	// 		if (!options.filter || options.filter(item)) {
+	// 			var currentDepth = item.pathDepth; - this.rootItem.pathDepth/;
+	// 			this.items.push(item);
+	// 			if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + this.rootItem.pathDepth))) {
+	// 				this.count.dir++;
+	// 				var names = (await nodeFs.readdir(item.path)).filter(options.filter);
+	// 				// for (let name of names) {
+	// 				// 	await fsPath(nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/);
+	// 				// }
+
+	// 			} else {
+	// 				this.count.file++;
+	// 			}
+	// 		}
+	// 	} catch (e) {
+	// 		this.errors.push(e);
+	// 		options.handleError(e);
+	// 	}
+	
+	// 	if (this.errors.length) {
+	// 		console.warn(`iterate('${this.root}'): stream end: ${this.errors.length} errors: ${this.errors.join('\n\t')}`);
+	// 	} else {
+	// 		console.console(`iterate('${this.root}'): stream end`);
+	// 	}
+	// })(options.path);
