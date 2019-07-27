@@ -10,7 +10,7 @@ const fsIterable = new FsIterable('/home/jk');
 (async () => {
 console.log(`Start: ${inspect(fsIterable)}`);
 	for await (let fsItem of fsIterable) {
-		console.log(`fsItem: Progress = ${(100 * fsIterable.itemIndex / fsIterable.count.all).toFixed(1)}%`);//${inspect(fsItem)}`);
+		console.log(`fsItem: Progress = ${(100 * fsIterable.itemIndex / fsIterable.count.all).toFixed(1)}% fsIterable.progress=${inspect(fsIterable.progress)}fsItem='${inspect(fsItem/*.path*/)}'`);//${inspect(fsItem)}`);
 		await new Promise((resolve) => setTimeout(resolve,100));
 	}
 console.log(`Done: ${inspect(fsIterable)}`);

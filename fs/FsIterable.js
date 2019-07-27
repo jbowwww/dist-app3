@@ -21,52 +21,53 @@ Q.longStackSupport = true;
 const getDevices = require('./devices.js');
 const pathDepth = require('./path-depth.js');
 const { trace } = require('../Task.js');
+const customInspect = function(wrapped, inspect) {
+	return Object.assign(wrapped, { [util.inspect.custom]: inspect });
+}
 
 module.exports = /*trace*/({ FsIterable, createFsItem, iterate });
 
 function FsIterable(options) {
-
 	if (!(this instanceof FsIterable)) {
 		return new FsIterable(options);
+	} else if (typeof options === 'string') {
+		options = { path: options };
 	}
-
+	const fsIterable = this;
 	this.options = options = _.defaults(options, {
 		path: nodePath.resolve(options.path || '.'),
 		maxDepth: 1,
 		filter: item => true,
-		objectMode: true,
-		highWaterMark: 16,
 		handleError(err) { console.warn(`iterate: ${err/*.stack*/}`); }
 	});
 	this.root = options.path;
 	this.rootItem = null;
 	this.paths = [options.path];
-	this.count = {
+	this.count = customInspect({
 		file: 0,
 		dir: 0,
 		unknown: 0,
 		get all() { return this.file + this.dir + this.unknown; }
-	}
-	// this.count[util.inspect.custom] = () => inspect(Object.assign({}, this.count));
+ 	}, () => inspect(_.assign({}, this.count)));
 	this.errors = [];
-	this.items = [];
-	this.items[util.inspect.custom] =  () => 'Array[' + this.items.length + ']';
+	this.items = customInspect([], () => 'Array[' + this.items.length + ']');
 	this.itemIndex = 0;
 	this.done = false;
-
-	this[Symbol.asyncIterator] = () => this;
-	this.next = async () => {
-		const done = this.itemIndex >= this.items.length;
-		const r = {
-			value: this.done && done ? undefined : done ? await this.currentPromiseItem : this.items[this.itemIndex],
-			done: this.done && done
-		};  
-		this.itemIndex++;
-		return r;
+	this[Symbol.asyncIterator] = async function* () {
+		while (!this.done || this.itemIndex < this.items.length) {
+			yield this.items[this.itemIndex++];
+		}
+		this.itemIndex = 0;
 	};
 
-const iterable =iterate(options);
+	const iterable = iterate(options);
 	console.verbose(`FsIterate(${inspect(options, { compact: false })}): this=${inspect(this, { compact: false })} iterate=${typeof iterate} iterable=${inspect(iterable)}`);
+	
+	this.progress = customInspect({
+		get total() { return fsIterable.count.all; },
+		get current() { return fsIterable.itemIndex; },
+		get progress() { return this.total === 0 ? 0 : 100 * fsIterable.itemIndex / this.total; }
+	}, () => inspect(_.assign({}, this.progress)));
 
 	(async () => {
 		for await(let currentPromiseItem of iterable) {
@@ -138,15 +139,17 @@ async function* iterate(options) {
 			}
 			if (!options.filter || options.filter(item)) {
 				var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
+				// nodeFs.readdir(item.path).then(names => {
+				// 		names = names.filter(options.filter);
+				// 		console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
+				// 		_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
+				// 	});
 				if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
 					var names = (await nodeFs.readdir(item.path)).filter(options.filter);
 					console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
 					_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
-
-					yield item;
-				} else {
-					yield item;
 				}
+				yield item;
 			}
 		} catch (e) {
 			self.errors.push(e);
