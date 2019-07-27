@@ -6,9 +6,6 @@ const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0,
 const promisifyMethods = require('../utility.js').promisifyMethods;
 const util = require('util');
 const _ = require('lodash');
-const pMap = require('p-map');
-// const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
-// const pAll = require('p-all');
 const Queue = require('../Queue.js');
 const nodeFs = promisifyMethods(require('fs'));
 const nodePath = require('path');
@@ -21,11 +18,20 @@ Q.longStackSupport = true;
 const getDevices = require('./devices.js');
 const pathDepth = require('./path-depth.js');
 const { trace } = require('../Task.js');
-const customInspect = function(wrapped, inspect) {
-	return Object.assign(wrapped, { [util.inspect.custom]: inspect });
-}
+const inspectWithGetters = function(wrapped, inspectFn) {
+	return Object.assign(wrapped, {
+		[util.inspect.custom]: typeof inspectFn === 'function' ? inspectFn
+		 : () => inspect(_.assign({}, wrapped))
+	});
+};
+const inspectArray = function(wrapped, inspectFn) {
+	return Object.assign(wrapped, {
+		[util.inspect.custom]: typeof inspectFn === 'function' ? inspectFn
+		 : () => 'Array[' + this.items.length + ']'
+	});
+};
 
-module.exports = /*trace*/({ FsIterable, createFsItem, iterate });
+module.exports = /*trace*/({ FsIterable });
 
 function FsIterable(options) {
 	if (!(this instanceof FsIterable)) {
@@ -42,160 +48,65 @@ function FsIterable(options) {
 	});
 	this.root = options.path;
 	this.rootItem = null;
-	this.paths = [options.path];
-	this.count = customInspect({
+	this.count = inspectWithGetters({
 		file: 0,
 		dir: 0,
 		unknown: 0,
 		get all() { return this.file + this.dir + this.unknown; }
- 	}, () => inspect(_.assign({}, this.count)));
+ 	});
 	this.errors = [];
-	this.items = customInspect([], () => 'Array[' + this.items.length + ']');
+	this.items = inspectWithGetters([], () => 'Array[' + this.items.length + ']');
 	this.itemIndex = 0;
-	this.done = false;
 	this[Symbol.asyncIterator] = async function* () {
-		while (!this.done || this.itemIndex < this.items.length) {
+		while (this._fsIterateInnerCalls > 0 || this.itemIndex < this.items.length) {
 			yield this.items[this.itemIndex++];
 		}
 		this.itemIndex = 0;
 	};
 
-	const iterable = iterate(options);
-	console.verbose(`FsIterate(${inspect(options, { compact: false })}): this=${inspect(this, { compact: false })} iterate=${typeof iterate} iterable=${inspect(iterable)}`);
+	console.verbose(`FsIterate(${inspect(options, { compact: false })}): this=${inspect(this, { compact: false })}`);
 	
-	this.progress = customInspect({
+	this.progress = inspectWithGetters({
 		get total() { return fsIterable.count.all; },
 		get current() { return fsIterable.itemIndex; },
 		get progress() { return this.total === 0 ? 0 : 100 * fsIterable.itemIndex / this.total; }
-	}, () => inspect(_.assign({}, this.progress)));
-
-	(async () => {
-		for await(let currentPromiseItem of iterable) {
-			this.currentPromiseItem = currentPromiseItem;
-			const fsItem = await currentPromiseItem;
-			this.items.push(fsItem);
-			this.count[fsItem.fileType]++;
-		}
-		this.done = true; 
-	})();
-
-}
-
-// creates a POJO FS item to be used by iterate. Takes a path and returns an object containing path, stats, and fileType
-function createFsItem(path, stats) {
-	return ({
-		path: /*nodePath.resolve*/(path),
-		stats,
-		get fileType() { return stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'; },
-		get pathDepth() { return this.path.split(nodePath.sep).length - 1; },
-		get extension() {
-			var n = this.path.lastIndexOf('.');
-			var n2 = Math.max(this.path.lastIndexOf('/'), this.path.lastIndexOf('\\'));
-			return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
-		},
-		[util.inspect.custom](depth, options) {
-			return _.assign({}, this);
-		}
 	});
-}
 
-// TODO: Make this scan all FS entries under the path without slowing for back pressure, or perhaps only dirs, or dirs+files but not stat?
-// or just all three (dirs+files+stats) so it then has sizes.. and can calculate progress and estimate ETA. If not including stats, estimate
-// would be less accurate as don't know sizes of files so probably all 3
-// Whether this shgould be a generator func (async or not) or a stream, or otherwise (just a fn call returns object, fn args include the
-// data processing fn?) IDK .. but iterate should maintain an object with total numbers (+sizes if incl stats) of FS entries under path,
-// total processed, dirs/files counts and progress (raw and % virtual) and ETA
-async function* iterate(options) {
-
-	console.log(`iterate=${typeof iterate} this=${typeof this} equal=${iterate === this}`);
-	options = _.defaults(options, {
-		path: nodePath.resolve(options.path || '.'),
-		maxDepth: 1,
-		filter: item => true,
-		objectMode: true,
-		highWaterMark: 16,
-		handleError(err) { console.warn(`iterate: ${err/*.stack*/}`); }
-	});
-	console.verbose(`iterate(${inspect(options, { compact: false })})`);
-  	
-	var self = {
-		root: options.path,
-		rootItem: null,
-		paths: [options.path],
-		errors: [],
-		promisePipe(...args) { return /*stream.finished*/(pipeline(self, new PromisePipe(...args).stream())); },
-		task: { max: 1, current: 0 }
-	};
-
-	for (let i = 0; i < self.paths.length; i++) { // as long as JS will re-evaluate self.paths.length each iteration? because self.paths continues growing
-		var path = self.paths[i];
-		// self.task.max = self.paths.length - 1;
-		// self.task.current = i;
+	this._fsIterateInnerCalls = 0;
+	const fsIterateInner = async path => {
 		try {
+			this._fsIterateInnerCalls++;
 			var stats = await nodeFs.lstat(path);
-			var item = createFsItem(path, stats);
-			if (path === self.root) {
-				self.rootItem = item;
-			}
-			if (!options.filter || options.filter(item)) {
-				var currentDepth = item.pathDepth; - self.rootItem.pathDepth/*self.rootDepth*/;	// +1 because below here next files are read from this dir
-				// nodeFs.readdir(item.path).then(names => {
-				// 		names = names.filter(options.filter);
-				// 		console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
-				// 		_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
-				// 	});
-				if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + self.rootItem.pathDepth/*self.rootDepth*/))/* && (!options.filter || options.filter(item))*/) {
-					var names = (await nodeFs.readdir(item.path)).filter(options.filter);
-					console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} self.paths=[${self.paths.length}] item=${inspect(item)}`);
-					_.forEach(names, name => self.paths.push(/*{ path:*/ nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/));
+			var item = inspectWithGetters({
+				path: /*nodePath.resolve*/(path),
+				stats,
+				get fileType() { return stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'; },
+				get pathDepth() { return this.path.split(nodePath.sep).length - 1; },
+				get extension() {
+					var n = this.path.lastIndexOf('.');
+					var n2 = Math.max(this.path.lastIndexOf('/'), this.path.lastIndexOf('\\'));
+					return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
 				}
-				yield item;
+			});
+			if (path === this.root) {
+				this.rootItem = item;
+			}
+			if (!this.options.filter || this.options.filter(item)) {
+				var currentDepth = item.pathDepth; - this.rootItem.pathDepth
+				this.items.push(item);
+				this.count[item.fileType]++;
+				if (item.fileType === 'dir' && ((this.options.maxDepth === 0) || (currentDepth <= this.options.maxDepth + this.rootItem.pathDepth))) {
+					var names = (await nodeFs.readdir(item.path)).filter(this.options.filter);
+					console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} this.items=[${this.items.length}] item=${inspect(item)}`);
+					await Promise.all(names.map(name => fsIterateInner(nodePath.join(item.path, name))));
+				}
 			}
 		} catch (e) {
-			self.errors.push(e);
-			options.handleError(e);
+			this.errors.push(e);
+			this.options.handleError(e);
+		} finally {
+			this._fsIterateInnerCalls--;
 		}
-	}
-
-	if (self.errors.length) {
-		console.warn(`iterate('${self.root}'): stream end: ${self.errors.length} errors: ${self.errors.join('\n\t')}`);
-	} else {
-		console.debug(`iterate('${self.root}'): stream end`);
-	}
+	};
+	fsIterateInner(this.options.path);
 }
-
-	// // for (let i = 0; i < this.paths.length; i++) { // as long as JS will re-evaluate this.paths.length each iteration? because this.paths continues growing
-	// (async function fsPath(path) {
-	// 	try {
-	// 		let prItem = nodeFs.lstat(path);
-	// 		this.items.push(prItem);
-	// 		var stats = await prItem;
-	// 		var item = createFsItem(path, stats);
-	// 		if (path === this.root) {
-	// 			this.rootItem = item;
-	// 		}
-	// 		if (!options.filter || options.filter(item)) {
-	// 			var currentDepth = item.pathDepth; - this.rootItem.pathDepth/;
-	// 			this.items.push(item);
-	// 			if (item.fileType === 'dir' && ((options.maxDepth === 0) || (currentDepth <= options.maxDepth + this.rootItem.pathDepth))) {
-	// 				this.count.dir++;
-	// 				var names = (await nodeFs.readdir(item.path)).filter(options.filter);
-	// 				// for (let name of names) {
-	// 				// 	await fsPath(nodePath.join(item.path, name)/*, dir: item, drive*/ /*}*/);
-	// 				// }
-
-	// 			} else {
-	// 				this.count.file++;
-	// 			}
-	// 		}
-	// 	} catch (e) {
-	// 		this.errors.push(e);
-	// 		options.handleError(e);
-	// 	}
-	
-	// 	if (this.errors.length) {
-	// 		console.warn(`iterate('${this.root}'): stream end: ${this.errors.length} errors: ${this.errors.join('\n\t')}`);
-	// 	} else {
-	// 		console.console(`iterate('${this.root}'): stream end`);
-	// 	}
-	// })(options.path);
