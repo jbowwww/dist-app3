@@ -4,6 +4,8 @@ const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0
 const util = require('util');
 const { EventEmitter } = require('events');
 
+module.exports = Queue;
+
 util.inherits(Queue, EventEmitter);
 Queue.prototype.constructor = Queue;
 
@@ -56,8 +58,11 @@ function _run(fn, ...args)  {
 	this.activeCount++;
 	this.runCount++;
 	console.log(`Running task : ${this._debug()}`);
-	return fn(...args)
-	.then(result => {
+	var r = fn(...args);
+	if (!(r instanceof Promise)) {
+		r = Promise.resolve(r);
+	}
+	return r.then(result => {
 		runEnd = Date.now();
 		const runDuration = runEnd - runStart;
 		this.successCount++;
@@ -99,7 +104,7 @@ Queue.prototype.add = Queue.prototype.enqueue = function add(fn, ...args) {
 	}
 };
 
-Queue.prototype.addAndRun = Queue.prototype.enqueueAndRun = function(fn, ...args) {
+Queue.prototype.addAndRun = Queue.prototype.enqueueAndRun = function addAndRun(fn, ...args) {
 	if (this.activeCount < this.concurrency) { 
 		return _run(fn, ...args);
 	} else {
@@ -132,5 +137,3 @@ Queue.prototype.onIdle = function onIdle() {
 		});
 	});
 };
-
-module.exports = Queue;
