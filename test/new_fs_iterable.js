@@ -22,7 +22,7 @@ console.log(`fsIterable: ${inspect(fsIterable)}`);
 	process.once('SIGINT', quitHandler);
 	setTimeout(() => {
 			process.off('SIGINT', quitHandler);
-			process.once('SIGINT', onSigInt);
+				process.once('SIGINT', onSigInt);
 		}, 1000);
 	function quitHandler() {
 		process.nextTick(() => process.exit(0));

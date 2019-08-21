@@ -1,37 +1,34 @@
 "use strict";
 
-const console = require('../stdio.js').Get('fs/iterate', { minLevel: 'debug' });	// console verbose log
-// const debug = require('debug')('fs/iterate.js');
-const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0, compact: false });
-const promisifyMethods = require('../utility.js').promisifyMethods;
-const util = require('util');
+const { inspect, promisify } = require('util');//.makeInspect({ depth: 2, breakLength: 0, compact: false });
 const _ = require('lodash');
-const Queue = require('../Queue.js');
-const nodeFs = promisifyMethods(require('fs'));
+const promisifyObject = o => Object.keys(o).reduce((a, k) =>
+	Object.defineProperty(a, k, { writeable: true, enumerable: true, value: o[k] instanceof Function ? promisify(o[k]) : o[k] }), {});
+const nodeFs = promisifyObject(require('fs'));
 const nodePath = require('path');
 const stream = new require('stream');
-stream.finished = util.promisify(stream.finished);
-var pipeline = util.promisify(stream.pipeline);
-const PromisePipe = require('../promise-pipe.js');
-const Q = require('q');
-Q.longStackSupport = true;
-const getDevices = require('./devices.js');
-const pathDepth = require('./path-depth.js');
-const { trace } = require('../Task.js');
+stream.finished = promisify(stream.finished);
+var pipeline = promisify(stream.pipeline);
+
 const inspectWithGetters = function(wrapped, inspectFn) {
 	return Object.assign(wrapped, {
-		[util.inspect.custom]: typeof inspectFn === 'function' ? inspectFn
+		[inspect.custom]: typeof inspectFn === 'function' ? inspectFn
 		 : () => inspect(_.assign({}, wrapped))
 	});
 };
 const inspectArray = function(wrapped, inspectFn) {
 	return Object.assign(wrapped, {
-		[util.inspect.custom]: typeof inspectFn === 'function' ? inspectFn
+		[inspect.custom]: typeof inspectFn === 'function' ? inspectFn
 		 : () => 'Array[' + this.items.length + ']'
 	});
 };
+const log = require('debug')('FsIterable');
+log.info = log.extend('info');
+log.warn = log.extend('warn');
 
-module.exports = /*trace*/({ FsIterable });
+// log(`_ = ${inspect(_)}\n\nfs = ${inspect(nodeFs)}`);
+
+module.exports = FsIterable;
 
 function FsIterable(options) {
 	if (!(this instanceof FsIterable)) {
@@ -44,7 +41,7 @@ function FsIterable(options) {
 		path: nodePath.resolve(options.path || '.'),
 		maxDepth: 1,
 		filter: item => true,
-		handleError(err) { console.warn(`iterate: ${err/*.stack*/}`); }
+		handleError(err) { log.warn(err/*.stack*/); }
 	});
 	this.root = options.path;
 	this.rootItem = null;
@@ -64,7 +61,7 @@ function FsIterable(options) {
 		this.itemIndex = 0;
 	};
 
-	console.verbose(`FsIterate(${inspect(options, { compact: false })}): this=${inspect(this, { compact: false })}`);
+	log(`FsIterate(${inspect(options, { compact: false })}): this=${inspect(this, { compact: false })}`);
 	
 	this.progress = inspectWithGetters({
 		get total() { return fsIterable.count.all; },
@@ -97,7 +94,7 @@ function FsIterable(options) {
 				this.count[item.fileType]++;
 				if (item.fileType === 'dir' && ((this.options.maxDepth === 0) || (currentDepth <= this.options.maxDepth + this.rootItem.pathDepth))) {
 					var names = (await nodeFs.readdir(item.path)).filter(this.options.filter);
-					console.debug(`${names.length} entries at depth=${currentDepth} in dir:${item.path} this.items=[${this.items.length}] item=${inspect(item)}`);
+					log('%d entries at depth=%d in dir:%s this.items=[%d] item=%o', names.length, currentDepth, item.path, this.items.length, item);
 					await Promise.all(names.map(name => fsIterateInner(nodePath.join(item.path, name))));
 				}
 			}
