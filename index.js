@@ -39,17 +39,25 @@ var searches = [
 		await app.dbConnect();
 		await Disk.findOrPopulate();
 		await pMap(searches, async search => {
-			// const QueueWrap = async* (iterable) => {
+			
+			const QueueWrap = async (iterable, iteratorFn) => {
+				console.log(`QueueWrap: start`);
 				const q = new Queue(4);
-				for await (const f of new FsIterable(search)) {
-					console.log(`f: ${inspect(f)}`);
-					await q.add(async function() {
-						(await FsEntry.findOrCreate(f)).getArtefact(async a => {
-							await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 }));
-						});
-					});
+				for await (const i of iterable) {
+					/*await*/ q.add(iteratorFn, i, iterable);
 				}
+				console.log(`QueueWrap: await q.onIdle`);
 				await q.onIdle();
+				console.log(`QueueWrap: end`);
+			};
+
+			await QueueWrap(new FsIterable(search), async function iterateFsItem(f, fsIterable) {
+				console.log(`f: ${inspect(f)}`);
+				(await FsEntry.findOrCreate(f)).getArtefact(async a => {
+					await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 }));
+				});
+			});
+					
 			// const queue = new Queue(4); // tried PQueue and PLimit previously but wanted to write my own (lack of dependencies on random npm packages, & other npm packages are often missing critical or desired feature or option 
 			// const fsIterable = new FsIterable(search).run(async processFsItem(item) => {	// TODO: would it be nicer to beable to do new FsIterable().eachAsync(async function() { }) and have this bound to the FsIterable (or just supply a fsIterable parameter to an arrow func)
 			// for await (let f of fsIterable) {	//(fsIterate(search))) {
