@@ -7,6 +7,8 @@
     "test": "test"
   },
   "dependencies": {
+    "@jbowwww/fs-iterable": "file:../modules/FsIterable",
+    "@jbowwww/queue": "file:../modules/Queue",
     "Q": "^1.0.0",
     "express": "^4.16.4",
     "lodash": "^4.17.11",
