@@ -6,13 +6,13 @@ const util = require('util');
 const { EventEmitter } = require('events');
 
 const pMap = require('p-map');
-const pDelay = require('p-delay');
 // const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
 // const pAll = require('p-all');
 const Queue = require('@jbowwww/queue');//'../modules/Queue');
 // const hashFile = require('./fs/hash.js');
 // const fs = require('fs');
 const FsIterable = require('@jbowwww/fs-iterable');//'../modules/FsIterable');
+const { Buffer } = require('@jbowwww/concurrentiterable');
 // const mongoose = require('mongoose');
 
 const app = require('./app.js');
@@ -39,15 +39,16 @@ var searches = [
 		console.verbose(`Queue = [${typeof Q}] ${Queue}`);
 		await app.dbConnect();
 		await Disk.findOrPopulate();
-		await pMap(searches, async search => {
-			await Queue.wrap(Buffer(new FsIterable(search)), { concurrency: 4 }, (f, fsIterable) => {
+		await pMap(searches, search => Queue.Iterate(
+			{ concurrency: 4 },
+			Buffer( new FsIterable(search) ), 
+			async (f, fsIterable) => {
 				console.log(`f: ${inspect(f)}`);
 				(await FsEntry.findOrCreate(f)).getArtefact(async a => {
 					await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 }));
 				});
 				console.log(`\n\nafter inner loop for \'${f.path}\'`);
-			});
-		});
+			}));
 	} catch (err) {
 		console.error(`main() error: ${err.stack||err}`);
 	} finally {
