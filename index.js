@@ -39,9 +39,9 @@ var searches = [
 		console.verbose(`Queue = [${typeof Q}] ${Queue}`);
 		await app.dbConnect();
 		await Disk.findOrPopulate();
-		await pMap(searches, search => Queue.Iterate(
+		await pMap(searches, search => 
+			Queue.Iterate( Buffer( new FsIterable( search ) ),
 			{ concurrency: 4 },
-			Buffer( new FsIterable(search) ), 
 			async (f, fsIterable) => {
 				console.log(`f: ${inspect(f)}`);
 				(await FsEntry.findOrCreate(f)).getArtefact(async a => {

@@ -1,3 +1,15 @@
+
+filters, queries etc
+
+albums recorded in one audio file (eg wav, mp3)
+	where duration ~= 30 - 90 min
+	is in media/audio (or configurable library path)
+	? has a id3 tag or similar or in dir structure with clear artist and/or album
+=> actions 
+	-split into files breaking around silence (or possibly beat / freq change if and when necessary for some albums)
+	-check location / move to canonical(?definition?) library audio / artist/ albumm path (or config var)
+
+
 190320
 
 Check stats counting on bulkSave, see below 2x as many calls as validate
