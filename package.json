@@ -21,7 +21,8 @@
     "p-pipe": "^1.2.0",
     "q": "^1.5.1",
     "scramjet": "^4.25.1",
-    "through2-concurrent": "^2.0.0"
+    "through2-concurrent": "^2.0.0",
+    "webworker-threads": "^0.7.17"
   },
   "devDependencies": {},
   "scripts": {

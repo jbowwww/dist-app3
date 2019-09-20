@@ -50,7 +50,7 @@ const Audio = require('./model/audio.js');
 					await f.getArtefact(async a => {	// const a = await f.getArtefact();
 						if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
 							console.verbose(`a1 = ${inspect(a)}`);
-
+							// ^ TODO: eliminate as much as possible logging like this - it should be in getArtefact() and use the debug package, which can option the logging on or off. Would allow for much cleaner code and nicer/easier testing
 							if (!a.audio) {
 								await a.addMetaData('audio', {});
 							}

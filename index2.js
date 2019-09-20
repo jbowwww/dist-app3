@@ -1,6 +1,7 @@
 /* 180926 : dist-app3
  * Another re-write, where artefact types are each in their own table
- * This should hopefully avoid the difficulty and awkardness related to static member functions and data properties on embedded document schemas.
+ * This should hopefully avoid the difficulty and awkardness related to static member
+ * functions and data properties on embedded document schemas.
  * Simplicity will be a focus on this version, not just technically but conceptually..
  *	- No overall, all-encompassing, universal container "artefact" type to speak of - not like dist-app2
  *		181028: This is not true now :) 
