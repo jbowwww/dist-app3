@@ -1,5 +1,20 @@
 
+190926
+
+Artefact types - practical concrete types
+	- FS. File, Dir, Disk etc, 
+	- Task / Note - heirarchial tree structure & lists. e.g. rootNode is the tree, each node has children[]
+	- URL / Bookmark / Endpoint / Address - for bookmarks, general reading todo, notes/research, services, etc (these could all be subtypes?)
+
+190910
+
 filters, queries etc
+where appropriate actions have ability to simulate what they would do, without doing anything, for purpose of confirming behaviour is desirable
+
+Obsolete, redundant, neglected or otherwise stale and stagnant file system paths
+	where d.fileType === 'dir' && all fs docs with (fs.fileType==='file'&&fs.parent===d) have m/c/atimes below a specified datetime
+=> actions
+	-move files to canonical library lcoations based on inferred types/schemas/aspects/interfaces/uses/whatever
 
 albums recorded in one audio file (eg wav, mp3)
 	where duration ~= 30 - 90 min
