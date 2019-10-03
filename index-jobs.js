@@ -1,19 +1,18 @@
 
 "use strict";
 const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
-const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: true });
+const inspect = require('./utility.js').makeInspect({ depth: 3, compact: true });
 const util = require('util');
+const obj = require('@jbowwww/object-util');
 const { EventEmitter } = require('events');
 
-const pMap = require('p-map');	// const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
-// const pAll = require('p-all');
-
-const Queue = require('@jbowwww/queue');//'../modules/Queue');
-// const hashFile = require('./fs/hash.js');
-const FsIterable = require('@jbowwww/fs-iterable');//'../modules/FsIterable');
+const pMap = require('p-map');
+const Queue = require('@jbowwww/queue');
+const FsIterable = require('@jbowwww/fs-iterable');
 const Iterable /*{ Buffer, Progress }*/ = require('@jbowwww/iterable');
 // const mongoose = require('mongoose');
-require('@jbowwww/async-generator');
+// require('@jbowwww/async-generator');
+const Limit = require('@jbowwww/limit');
 
 const app = require('./app.js');
 
@@ -49,22 +48,32 @@ const doFileHash = file => new Promise((resolve, reject) => {
 // First try webworker-threads
 (async function main() {
 	try {
+		// [Iterable.Buffer,
+		// 			Iterable.Progress,
+		// 			Limit.asGenerator({ concurrency: 4 })
+		// 			].forEach(stage => {
+		// 				console.log(`main stage: stage=${stage} stage=${inspect(stage)}`);
+		// 			})
 		await app.dbConnect();
 		await Disk.findOrPopulate();
 		await pMap(searches, async search => {
-			for (const f of new FsIterable(search).pipe(
-					Iterable.Buffer,
-					Iterable.Progress,
-					Iterable.Queue({ concurrency: 4 }) )) {
-				console.log(`iterable: ${inspect(iterable)}`);
-				console.log(`f: ${inspect(f)}`);
-				(await FsEntry.findOrCreate(f)).getArtefact(async a => {
-					await doFileHash(f);
-					await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 })); 
-			// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
-				});
-				console.log(`\n\nafter inner loop for \'${f.path}\'`);
-			}
+			// console.verbose(`new FsIterable(search).pipe = ${new FsIterable(search).pipe}`);
+			// for await (const f of 
+			await new FsIterable(obj.assign(search, { progress: true })).pipe(
+					// Iterable.Buffer,
+					// Iterable.Progress,
+					Limit.asGenerator({ concurrency: 4 },
+					// Iterable.Queue({ concurrency: 4 },//) )) {
+				async (f, fsIterable) => {
+					// console.log(`fsIterable: ${inspect(this)}`);
+								console.log(`f: ${inspect(f)}`);
+								(await FsEntry.findOrCreate(f)).getArtefact(async a => {
+									await doFileHash(f);
+									await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 })); 
+							// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
+								});
+								// console.log(`\n\nafter inner loop for \'${f.path}\'`);
+			}));
 		});
 	} catch (err) {
 		console.error(`main() error: ${err.stack||err}`);

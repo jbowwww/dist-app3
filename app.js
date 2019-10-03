@@ -20,7 +20,7 @@ var app = {
 	async dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
 		console.verbose(`dbConnect: Opening db '${url}'...`);
 		try {
-			let connection = await mongoose.connect(url, { useNewUrlParser: true });
+			let connection = await mongoose.connect(url, { useNewUrlParser: true, readPreference: 'secondary' });
 			console.log(`dbConnect: opened db '${url}'`);
 			app.db = { connection, url };
 			return connection;
