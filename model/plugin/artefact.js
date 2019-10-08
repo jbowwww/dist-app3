@@ -94,7 +94,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		}
 
 		let a;	// instead of Obkject.create use Artefact? 
-		try {
+		// try {
 	
 			a = Object.create({
 				
@@ -190,10 +190,10 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 			// console.debug(`_artefacts=${inspect(_artefacts)}`)
 			// delete _artefacts[cacheKey];
 				 // })
-		} catch (e) {
-			console.warn(`getArtefact error: ${e.stack||e}`);
-			// docModel._stats.errors.push(e);
-		}
+		// } catch (e) {
+		// 	console.warn(`getArtefact error: ${e.stack||e}`);
+		// 	// docModel._stats.errors.push(e);
+		// }
 		return a;	
 	});
 

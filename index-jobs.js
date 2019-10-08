@@ -30,17 +30,38 @@ var searches = [
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
 
-var threadPoolFileHash = require('webworker-threads').createPool(4).all.eval(File);
+var threadPoolFileHash = require('webworker-threads')
+	.createPool(4)
+	.all.eval(require('mongoose'))
+	// .all
+	// .eval(Artefact)
+	.all.eval(FsEntry)
+	.all.eval(File)
+	.all.eval(Dir,
+	// .all.eval(`
+	// 	const FsEntry = require('FsEntry');
+	// 	const File = require('File');
+	// `,
+	 function cb(err, data) {
+		if (err) { console.error(`Error hashing: ${err.stack||err} err=${inspect(err)}`); }
+		// data.then(init => {
+		// 	console.log(`init = ${init}`);
+		// 	resolve(init);
+		// });
+		console.log(`data = ${data}`);
+	
+});
+console.log(`threadPoolFileHash = ${inspect(threadPoolFileHash)}`);
 
 const doFileHash = file => new Promise((resolve, reject) => {
-	threadPoolFileHash.any.eval(`File.hydrate(${file.toObject()}).doHash()`, function cb(err, data) {
-		if (err) { console.error(`Error hashing: ${err.stack||err}`); reject(err); }
-		data.then(hash => {
+	threadPoolFileHash.any.eval(`File.hydrate(${JSON.stringify(file.toObject())}).doHash()`, function cb(err, data) {
+		console.log(`file.hash = DATA: ${data}`);
+		if (err) { console.error(`Error hashing: ${err.stack||err} err=${inspect(err)}`); return reject(err); }
+		return data.then(hash => {
 			console.log(`file.hash = ${data} ${hash}`);
 			file.hash = hash;
 			resolve(file);
 		});
-		console.log(`file.hash = DATA: ${data}`);
 	});
 });
 
@@ -57,9 +78,11 @@ const doFileHash = file => new Promise((resolve, reject) => {
 		await app.dbConnect();
 		await Disk.findOrPopulate();
 		await pMap(searches, async search => {
-			// console.verbose(`new FsIterable(search).pipe = ${new FsIterable(search).pipe}`);
+			// console.verbose(`new FsIterable(search).pipe = ${new FsIterazble(search).pipe}`);
 			// for await (const f of 
-			await new FsIterable(obj.assign(search, { progress: true })).pipe(
+			await new FsIterable(
+				obj.assign(search, { progress: true })
+			).pipe(
 					// Iterable.Buffer,
 					// Iterable.Progress,
 					Limit.asGenerator({ concurrency: 4 },
@@ -68,7 +91,7 @@ const doFileHash = file => new Promise((resolve, reject) => {
 					// console.log(`fsIterable: ${inspect(this)}`);
 								console.log(`f: ${inspect(f)}`);
 								(await FsEntry.findOrCreate(f)).getArtefact(async a => {
-									await doFileHash(f);
+									!!a.file && await doFileHash(a.file);
 									await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 })); 
 							// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
 								});
