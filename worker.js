@@ -47,13 +47,21 @@ module.exports = {
   },
 
   ContextWorker(contextFn) {
-    const ctxFn = contextFn.toString();
-    ctxFn.splice(ctxFn.indexOf('(', 0, 'fn, ');
-    ctxFn.splice(ctxFn.length - 1, 1, 'require('worker_threads').parentPort.postMessage('exit', fn());\n}');
-    return async function(fn, ...args) {
+    log(`contextFn: ${contextFn} : ${contextFn.toString()}`);
+    let ctxFn = contextFn.toString().trim();
+    if (!ctxFn.startsWith('async ')) {
+      ctxFn = 'async ' + ctxFn;
+    }
+    ctxFn = ctxFn.replace('(', contextFn.length === 0 ? '(fn' : '(fn, ');
+    ctxFn = ctxFn.replace(')', ', ...args)');
+    ctxFn = ctxFn.slice(0, ctxFn.length - 1);
+    ctxFn += "require('worker_threads').parentPort.postMessage('exit', await fn(...args));\n}";
+    log(`ctxFn: ${ctxFn}`);
+    return function(fn, ...args) {
+      log(`fn: ${fn}\nargs=${inspect(args)}`);
       return new Promise((resolve, reject) => {
         const worker = new Worker(
-          `((${ctxFn})(${fn.toString}, ${args.map(JSON.parse).join(',')})`, {
+          `(${ctxFn})(${fn.toString}, ${args.map(JSON.parse).join(',')})`, {
           eval: true,
           workerData: null,
           stdin: false,

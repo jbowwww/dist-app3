@@ -7,19 +7,21 @@ const obj = require('@jbowwww/object-util');
 const { copy: assign} = obj;
 const { EventEmitter } = require('events');
 const FsIterable = require('@jbowwww/fs-iterable');
-const { Worker } = require('./worker.js');
+const { Worker, ContextWorker } = require('./worker.js');
 const pMap = require('p-map');
 const pDelay = ms => new Promise((resolve, reject) => setTimeout(resolve, ms));
 const pEvent = (em, ev) => new Promise((resolve, reject) => em.once(ev, resolve).on('error', reject));/*require('p-event');*/
 const Limit = require('@jbowwww/limit');
 
-const app = require('./app.js');
-
-const Disk = require('./model/filesys/disk.js');
-const FsEntry = require('./model/filesys/filesys-entry.js');
-const File = require('./model/filesys/file.js');
-const Dir = require('./model/filesys/dir.js');
-const Audio = require('./model/audio.js');
+const workerContextFn = function() {
+	const pMap = require('p-map');
+	const app = require('./app.js');
+	const Disk = require('./model/filesys/disk.js');
+	const FsEntry = require('./model/filesys/filesys-entry.js');
+	const File = require('./model/filesys/file.js');
+	const Dir = require('./model/filesys/dir.js');
+	const Audio = require('./model/audio.js');
+};
 
 var searches = [
 	{ path: '/etc', maxDepth: 0 }
@@ -30,21 +32,11 @@ var searches = [
 ];
 
 const Recur = async function(fn, interval = 60000) { while (1) { await fn(); await pDelay(interval); } };
-const worker = Worker(function() { require('worker_threads').parentPort.postMessage(`hello from worker`); })
-const w = worker();
-w.on('message', msg => console.log(`worker: ${msg}`));
-// console.log(`Worker=${inspect(Worker)} worker=${inspect(worker)} w=${inspect(w)}`)
+
 (async function main() {
+	let exitCode;
 	try {
-		Worker.requires = ( [
-			[	'pMap',		'p-map'						],
-			[	'app', 		'./app.js'					],
-			[	'Disk',		'./model/filesys/disk.js' 	],
-			[	'FsEntry',	'./model/filesys/filesys-entry.js' 	],
-			[	'File',		'./model/filesys/file.js' 	],
-			[	'Dir',		'./model/filesys/dir.js' 	],
-			[	'Audio',	'./model/audio.js' 			] ] );
-		const exitCode = await pEvent(Worker(async function() {
+		exitCode = await ContextWorker(workerContextFn)(async function() {
 			try {		// TODO: Combine index.js index2.js andf file hashing into one script using thrads
 				
 				await app.dbConnect();
@@ -68,14 +60,13 @@ w.on('message', msg => console.log(`worker: ${msg}`));
 				});
 			} catch (err) {
 				console.error(`worker error: ${err.stack||err}`);
-			} finally {
 			}
-			console.log(`worker thread exited with code=${exitCode}`);
-		}) (), 'exit');
+		});
 	} catch (err) {
 		console.error(`main() error: ${err.stack||err}`);
 	} finally {
-		await app.quit();
+		console.log(`worker thread exited with code=${exitCode}`);
+		// await app.quit();
 	}
 }) ();
 
