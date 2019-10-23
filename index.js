@@ -6,7 +6,7 @@ const util = require('util');
 const { EventEmitter } = require('events');
 
 const pMap = require('p-map');
-const pDelay = require('p-delay');
+// const pDelay = require('p-delay');
 // const pMap = (pArray, pFunc) => Promise.all(pArray.map(pFunc));
 // const pAll = require('p-all');
 const Queue = require('@jbowwww/queue');//'../modules/Queue');
@@ -182,7 +182,7 @@ var searches = [
 				}
 			}
 
-			for await (const f of Concurrent(1, Buffer(new FsIterable(search)))) {//, async function iterateFsItem(f, fsIterable) {
+			for await (const f of ConcurrentAsync(1, Buffer(new FsIterable(search)))) {//, async function iterateFsItem(f, fsIterable) {
 				console.log(`f: ${inspect(f)}`);
 				(await FsEntry.findOrCreate(f)).getArtefact(async a => {
 					await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 }));

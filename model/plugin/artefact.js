@@ -1,5 +1,5 @@
 "use strict";
-const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'log' });	// log verbose debug
+const console = require('../../stdio.js').Get('model/plugin/artefact', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const _ = require('lodash');
@@ -55,10 +55,10 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		if (typeof options === 'function') {
 			cb = options;
 			options = {}
-		} else if (!(typeof cb === 'function')) {
+		} /*else if (!(typeof cb === 'function')) {
 			throw new TypeError(`getArtefact: callback cb must be supplied`);
-		}
-
+		}*/
+		console.verbose(`getArtefact(${inspect(options)}, ${inspect(cb)}) this=${inspect(this)}`)
 		const doc = this;
 		const docModel = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
 		const docModelName = docModel.modelName;
@@ -186,7 +186,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 			await Promise.all(_.map(allModels, modelName => a[modelName] ? a[modelName] : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)));
 			 console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>mn).join(', ')} ] a=${inspect(a, { compact: false })}`);
 			
-			await cb(a);
+			if (cb) await cb(a);
 			// console.debug(`_artefacts=${inspect(_artefacts)}`)
 			// delete _artefacts[cacheKey];
 				 // })
