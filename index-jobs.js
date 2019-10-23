@@ -6,11 +6,15 @@ const util = require('util');
 const obj = require('@jbowwww/object-util');
 const { copy: assign} = obj;
 const { EventEmitter } = require('events');
+const FsIterable = require('@jbowwww/fs-iterable');
+const { Worker } = require('./worker.js');
 const pMap = require('p-map');
 const pDelay = ms => new Promise((resolve, reject) => setTimeout(resolve, ms));
-const FsIterable = require('@jbowwww/fs-iterable');
+const pEvent = (em, ev) => new Promise((resolve, reject) => em.once(ev, resolve).on('error', reject));/*require('p-event');*/
 const Limit = require('@jbowwww/limit');
+
 const app = require('./app.js');
+
 const Disk = require('./model/filesys/disk.js');
 const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
@@ -26,32 +30,52 @@ var searches = [
 ];
 
 const Recur = async function(fn, interval = 60000) { while (1) { await fn(); await pDelay(interval); } };
-
+const worker = Worker(function() { require('worker_threads').parentPort.postMessage(`hello from worker`); })
+const w = worker();
+w.on('message', msg => console.log(`worker: ${msg}`));
+// console.log(`Worker=${inspect(Worker)} worker=${inspect(worker)} w=${inspect(w)}`)
 (async function main() {
-	try {		// TODO: Combine index.js index2.js andf file hashing into one script using thrads
-		
-		await app.dbConnect();
-		await Disk.findOrPopulate();
-		await pMap(searches, async search => /*Recur(async () =>*/ {
-			let errors = [];
-			let fsIterable = new FsIterable(obj.assign(search, { progress: true }));
-			for await (let f of fsIterable) {
-				try {
-					console.log(`f: ${inspect(f)} fsIterable=${inspect(fsIterable)} this=${inspect(this)}`);
-					let a = await (await FsEntry.findOrCreate(f)).getArtefact();
-					!!a.file && await a.file.doHash();
-					await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 })); 
-						// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
-				} catch (e) {
-					console.warn(`warn: f='${f.path}' e=${e.stack||e}`);
-					errors.push(e);
-				}
+	try {
+		Worker.requires = ( [
+			[	'pMap',		'p-map'						],
+			[	'app', 		'./app.js'					],
+			[	'Disk',		'./model/filesys/disk.js' 	],
+			[	'FsEntry',	'./model/filesys/filesys-entry.js' 	],
+			[	'File',		'./model/filesys/file.js' 	],
+			[	'Dir',		'./model/filesys/dir.js' 	],
+			[	'Audio',	'./model/audio.js' 			] ] );
+		const exitCode = await pEvent(Worker(async function() {
+			try {		// TODO: Combine index.js index2.js andf file hashing into one script using thrads
+				
+				await app.dbConnect();
+				await Disk.findOrPopulate();
+				await pMap(searches, async search => /*Recur(async () =>*/ {
+					let errors = [];
+					let fsIterable = new FsIterable(obj.assign(search, { progress: true }));
+					for await (let f of fsIterable) {
+						try {
+							console.log(`f: ${inspect(f)} fsIterable=${inspect(fsIterable)} this=${inspect(this)}`);
+							let a = await (await FsEntry.findOrCreate(f)).getArtefact();
+							!!a.file && await a.file.doHash();
+							await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 })); 
+								// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
+						} catch (e) {
+							console.warn(`warn: f='${f.path}' e=${e.stack||e}`);
+							errors.push(e);
+						}
+					}
+					console.log(`errors[${errors.length}] = ${inspect(errors)}`);
+				});
+			} catch (err) {
+				console.error(`worker error: ${err.stack||err}`);
+			} finally {
 			}
-			console.log(`errors[${errors.length}] = ${inspect(errors)}`);
-		});
+			console.log(`worker thread exited with code=${exitCode}`);
+		}) (), 'exit');
 	} catch (err) {
 		console.error(`main() error: ${err.stack||err}`);
 	} finally {
 		await app.quit();
 	}
-})();
+}) ();
+
