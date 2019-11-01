@@ -13,16 +13,6 @@ const pDelay = ms => new Promise((resolve, reject) => setTimeout(resolve, ms));
 const pEvent = (em, ev) => new Promise((resolve, reject) => em.once(ev, resolve).on('error', reject));/*require('p-event');*/
 const Limit = require('@jbowwww/limit');
 
-const workerContextFn = function() {
-	const pMap = require('p-map');
-	const app = require('./app.js');
-	const Disk = require('./model/filesys/disk.js');
-	const FsEntry = require('./model/filesys/filesys-entry.js');
-	const File = require('./model/filesys/file.js');
-	const Dir = require('./model/filesys/dir.js');
-	const Audio = require('./model/audio.js');
-};
-
 var searches = [
 	{ path: '/etc', maxDepth: 0 }
 	// { path: '/mnt/media', maxDepth: 0 },
@@ -36,6 +26,17 @@ const Recur = async function(fn, interval = 60000) { while (1) { await fn(); awa
 (async function main() {
 	let exitCode;
 	try {
+		
+		const workerContextFn = function() {
+			const pMap = require('p-map');
+			const app = require('./app.js');
+			const Disk = require('./model/filesys/disk.js');
+			const FsEntry = require('./model/filesys/filesys-entry.js');
+			const File = require('./model/filesys/file.js');
+			const Dir = require('./model/filesys/dir.js');
+			const Audio = require('./model/audio.js');
+		};
+
 		exitCode = await ContextWorker(workerContextFn)(async function() {
 			try {		// TODO: Combine index.js index2.js andf file hashing into one script using thrads
 				
