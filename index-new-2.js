@@ -29,22 +29,27 @@ const Audio = require('./model/audio.js');
 
 const Recur = async function(fn, interval = 60000) { while (1) { await fn(); await pDelay(interval); } };
 const source = (input, options = {}) => {
-	let next = null;;
+	let next = null;
 	if (input[Symbol.iterator]) {
 		const it = input[Symbol.iterator]();
 		next = it.next.bind(it);
 	} else if (input[Symbol.asyncIterator]) {
 		const it = input[Symbol.asyncIterator]();
 		next = it.next.bind(it);
-	} else if (input.addEventListener) {
-		next = () => new Promise((resolve, reject) => { input.once(options.event||'data', (data) => resolve({ value: data, done: false})).once('end', () => resolve({ done: true })).once('error', reject); });
+	} else if (input.addEventListener || input.on || input.once) {
+		next = () => new Promise((resolve, reject) => {
+			input.once(options.event||'data', (data) => resolve({ value: data, done: false})).once('end', () => resolve({ done: true })).once('error', reject); });
+	} else {
+		console.log(`Could not get source iteration technique!`);
 	}
-	return {
+	const r = {
 		next,
 		[Symbol.iterator]() { return this; },
 		[Symbol.asyncIterator]() { return this; } 
 	};
-}
+	console.log(`source: ${inspect(r)}`);
+	return r;
+;}
 
 const streamAsync = async (source, options, fn) => {
 	if (typeof options === 'function' && fn === undefined) {
@@ -57,9 +62,9 @@ const streamAsync = async (source, options, fn) => {
 	let errors = [];
 	for await (const data of source) {
 		try {
-			console.verbose(`source in data: ${inspect(data)}\nsource: ${inspect(source)}\nthis=${inspect(this)}\nprocessFn.pending.length = ${processFn.pending.length}`);
+			// console.verbose(`source in data: ${inspect(data)}\nthis=${inspect(this)}\nprocessFn.pending.length = ${processFn.pending.length}\nid=${cluster.worker.id || 'master'}`);
 			const processedData = await processFn.call(source, data);
-			console.verbose(`processed data: ${inspect(data)}\nsource: ${inspect(source)}\nthis=${inspect(this)}\nprocessFn.pending.length = ${processFn.pending.length}`);
+			// console.verbose(`processed data: ${inspect(processedData)}\nthis=${inspect(this)}\nprocessFn.pending.length = ${processFn.pending.length}`);
 		} catch (e) {
 			console.warn(`warn: e=${e.stack||e} for data=${inspect(data)}`);
 			errors.push(e);
@@ -69,14 +74,25 @@ const streamAsync = async (source, options, fn) => {
 };
 
 const clusterProcesses = async (...processes) => {
+	const workerPromises = [];
 	if (cluster.isMaster) {
-		for (const process of processes) {
-			cluster.fork();
+		for (const i in processes) {
+			console.log(`Master forking worker #${i}`);
+			const worker = cluster.fork({ id: i });
+			workerPromises.push(pEvent(worker, 'exit'));
 		}
+		console.log(`Master awaiting ${workerPromises.length} promises: ${inspect(workerPromises)}`);
+		const ret = await Promise.all(workerPromises);
+		console.log(`Master received fulfilment array of: ${inspect(ret)}`);
 	}
 	else if (cluster.isWorker) {
-		console.log(`worker processes: ${inspect(processes)}, cluster.worker.id=${cluster.worker.id}`);
-		await (processes.shift())();
+		const id = process.env.id || -1; // cluster.worker.id;
+		if (id < 0) {
+			throw new Error(`Worker didn't get valid ID`);
+		}
+		console.log(`worker process #${id} has processes: ${inspect(processes)}`);
+		const ret = await (processes[id])();
+		console.log(`worker process #${id} returned: ${inspect(ret)}`);
 	}
 };
 
@@ -88,7 +104,7 @@ const clusterProcesses = async (...processes) => {
 				try {
 					await streamAsync(
 						source(new FsIterable(obj.assign(search, { progress: true }))),
-						{ concurrency: 2 }, async f => {
+						{ concurrency: 1 }, async f => {
 							let a = await (await FsEntry.findOrCreate(f)).getArtefact();
 							!!a.file && //await a.file.doHash();
 							await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 1250 })); 
@@ -98,26 +114,32 @@ const clusterProcesses = async (...processes) => {
 					console.error(`error for search: ${inspect(search)}: ${e.stack||e}`);
 				}			
 			});
-		}, async () => {
-			// console.log(`\n\nProcess ${cluster.worker.id}\n\n`);
-			await Promise.all([
+		}, //async () => {
+			// console.log(`\n\nProcess shouldbetwo ${cluster.worker.id}\n\n`);
+			// await Promise.all([
 				(async () => {
-					for await (const change of source(File.watch([]), { event: 'change' })) {
-						const f = await FileSys.hydrate(change.fullDocument);
-						await f.hash();
-						await f.save();
-						console.log(`fullDoc.hash.save=${inspect(f)}`); 
-					}
-				})(),
+					// for await (const change of
+					await streamAsync(source(File.watch([]), { event: 'change' }), 
+						async change => {
+							const f = await FileSys.hydrate(change.fullDocument);
+							console.log(`FileSys.hydrate=${inspect(f)} change=${inspect(change)}`); 
+							await f.doHash();
+							await f.save();
+							console.log(`fullDoc.hash.save=${inspect(f)}`); 
+						});
+				}),
 				(async () => {
-					for (const f of source(File.find({ hash: { $exists: false } }).cursor())) {
-						await f.hash();
-						await f.save();
-						console.log(`fullDoc.hash.save=${inspect(f)}`);
-					}
-				})()
-			]);
-		})	
+					// for (const f of 
+					await streamAsync(source(File.find({ hash: { $exists: false } }).cursor()),
+						async f => {
+							await f.doHash();
+							await f.save();
+							console.log(`fullDoc.hash.save=${inspect(f)}`);
+						});
+				})
+			// ]);
+		// }
+		);
 	} catch (err) {
 		console.error(`worker error: ${err.stack||err}`);
 	}
