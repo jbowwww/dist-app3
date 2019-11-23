@@ -63,11 +63,15 @@ var searches = [
 
 			async function hash () {
 				await streamAsync(
-					source(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' }), 
-					async change => {
-						console.log(`change=${inspect(change)}`);
-						const f = await FsEntry.hydrate(change.fullDocument);
-						console.log(`FsEntry.hydrate=${inspect(f)} change=${inspect(change)}`); 
+					File.find({ hash: { $exists: false } }).cursor(),
+					source(
+						File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' }
+						async change => { 
+							console.log(`change=${inspect(change)}`);
+							return await FsEntry.hydrate(change.fullDocument);
+						}),
+					async f => {
+						console.log(`f=${inspect(f)}`); 
 						await f.doHash();
 						await f.save();
 						console.log(`fullDoc.hash.save=${inspect(f)}`); 
