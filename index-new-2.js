@@ -1,23 +1,16 @@
 
 "use strict";
-// const cluster = require('cluster');
-// const debug = (...args) => require('debug')('index')(`${cluster.isWorker?'#'+cluster.worker.id+' ':''}`, ...args);
-// const console = require('./stdio.js').Get('index', { minLevel: 'verbose' });	// debug verbose log
+
+const debug = require('@jbowwww/debug')('index')
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: true });
 const util = require('util');
-// const obj = require('@jbowwww/object-util');
-const { EventEmitter } = require('events');
 const FsIterable = require('@jbowwww/fs-iterable');
-const pMap = require('p-map');
-const pDelay = ms => new Promise((resolve, reject) => setTimeout(resolve, ms));
-const pEvent = require('@jbowwww/event');//(em, ev) => new Promise((resolve, reject) => em.once(ev, resolve).on('error', reject));/*require('p-event');*/
-
+const { delay, event, map } = require('@jbowwww/promise');
 // const Recur = async function(fn, interval = 60000) { while (1) { await fn(); await pDelay(interval); } };
 const Limit = require('@jbowwww/limit');
-const source = require('@jbowwww/source');
+const { combine, event } = require('@jbowwww/Source2');
 // const streamAsync = require('@jbowwww/stream-async');
 const clusterProcesses = require('@jbowwww/cluster-processes');
-const debug = require('@jbowwww/debug')('index')
 
 const app = require('./app.js');
 const Disk = require('./model/filesys/disk.js');
@@ -44,20 +37,17 @@ var searches = [
 			async function populate () {
 				await pMap(searches, async search => {
 					try {
-						// for await (const f of
-						await source(new FsIterable(search)).pipe(
-							/*Limit({ concurrency: 1 },*/ async function (f) {
-								try {
-									debug(`this=${inspect(this)} f=${inspect(f)}`);
-									let a = await (await FsEntry.findOrCreate(f)).getArtefact();
-									// !!a.file && //await a.file.doHash();
-									await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 2000 })); 
-									// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
-								} catch (e) {
-									debug(`warn for search: ${inspect(search)}: ${e.stack||e}`);
-								}
-							});
-						// }
+						for await (const f of new FsIterable(search)) {
+							try {			// /*Limit({ concurrency: 1 },*/ async function (f) {
+								debug(`this=${inspect(this)} f=${inspect(f)}`);
+								let a = await (await FsEntry.findOrCreate(f)).getArtefact();
+								// !!a.file && //await a.file.doHash();
+								await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 2000 })); 
+								// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
+							} catch (e) {
+								debug(`warn for search: ${inspect(search)}: ${e.stack||e}`);
+							}				// });
+						}
 					} catch (e) {
 						debug(`error for search: ${inspect(search)}: ${e.stack||e}`);
 					}			
@@ -67,10 +57,9 @@ var searches = [
 
 			async function hash () {
 				try {
-					// for await (const f of
-					await source(
+					for await (const f of combine(
 						File.find({ hash: { $exists: false } }).cursor(),
-						source(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' })
+						event(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' })
 						.pipe(async function (change) { 
 							debug(`change=${inspect(change)}`);
 							return await FsEntry.hydrate(change.fullDocument);
