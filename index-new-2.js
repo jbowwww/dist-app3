@@ -5,10 +5,10 @@ const debug = require('@jbowwww/debug')('index')
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: true });
 const util = require('util');
 const FsIterable = require('@jbowwww/fs-iterable');
-const { delay, event, map } = require('@jbowwww/promise');
+const { /*delay, event,*/ map } = require('@jbowwww/promise');
 // const Recur = async function(fn, interval = 60000) { while (1) { await fn(); await pDelay(interval); } };
 const Limit = require('@jbowwww/limit');
-const { combine, event } = require('@jbowwww/Source2');
+const { combine, emitter } = require('@jbowwww/Source2');
 // const streamAsync = require('@jbowwww/stream-async');
 const clusterProcesses = require('@jbowwww/cluster-processes');
 
@@ -31,99 +31,86 @@ var searches = [
 (async function main() {
 	try {
 		await app.dbConnect();
-		// TODO: Give names to each process somehow for identificatoin. Use object instead of array?
 		await clusterProcesses(
 
 			async function populate () {
-				await pMap(searches, async search => {
-					try {
+				await map(searches, async search => {
+					// try {
 						for await (const f of new FsIterable(search)) {
 							try {			// /*Limit({ concurrency: 1 },*/ async function (f) {
 								debug(`this=${inspect(this)} f=${inspect(f)}`);
 								let a = await (await FsEntry.findOrCreate(f)).getArtefact();
-								// !!a.file && //await a.file.doHash();
 								await (!!a.dir ? a.save() : a.bulkSave({ maxBatchSize: 20, batchTimeout: 2000 })); 
-								// TODO: Make an option on Artefact/model that enables calls to .save() to pass to bulkSave(), which woudl eliminate the need for this step here
 							} catch (e) {
 								debug(`warn for search: ${inspect(search)}: ${e.stack||e}`);
 							}				// });
 						}
-					} catch (e) {
-						debug(`error for search: ${inspect(search)}: ${e.stack||e}`);
-					}			
+					// } catch (e) {
+					// 	debug(`error for search: ${inspect(search)}: ${e.stack||e}`);
+					// }			
 				});
 				app.logStats();
 			},
 
 			async function hash () {
-				try {
+				// try {
 					for await (const f of combine(
 						File.find({ hash: { $exists: false } }).cursor(),
-						event(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' })
-						.pipe(async function (change) { 
+						emitter(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' },
+						change => { 
 							debug(`change=${inspect(change)}`);
-							return await FsEntry.hydrate(change.fullDocument);
-						}))
-					.pipe(
-						/*Limit*/(/*{ concurrency: 1 },*/ async function(f) {
-							try {
-								debug(`this=${inspect(this)} f=${inspect(f)}`); 
+							return FsEntry.hydrate(change.fullDocument);
+						}) )) {
+						try {
+							debug(`this=${inspect(this)} f=${inspect(f)}`); 
+							if (f.fileType === 'file') {
 								await f.doHash();
-								await f.save();
-								debug(`fullDoc.hash.save=${inspect(f)}`);
-							} catch (e) {
-								debug(`warn for hash: f=${inspect(f)}: ${e.stack||e}`);
-							} 
-						}));
-				} catch (e) {
-					debug(`error for hash: ${e.stack||e}`);
-				}
+							}
+							await f.save();
+							debug(`fullDoc.hash.save=${inspect(f)}`);
+						} catch (e) {
+							debug(`warn for hash: f=${inspect(f)}: ${e.stack||e}`);
+						} 
+					}
+				// } catch (e) {
+				// 	debug(`error for hash: ${e.stack||e}`);
+				// }
 				app.logStats();			
 			},
 
-			// async function hashExistingFiles() {
-			// 	await streamAsync(source(File.find({ hash: { $exists: false } }).cursor()),
-			// 		async f => {
-			// 			await f.doHash();
-			// 			await f.save();
-			// 			debug(`fullDoc.hash.save=${inspect(f)}`);
-			// 		});
-			// },
-
 			async function populateAudio() {
-				try {
-					// for await (const f of 
-					await source(
+				// try {
+					for await (const f of combine(
 						File.find({ hash: { $exists: false } }).cursor(),					
-						source(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' })
-						.pipe(async change => { 
-							debug(`File.watch this=${inspect(this)} change=${inspect(change)}`);
-							return await FsEntry.hydrate(change.fullDocument);
-						}))
-					.pipe(
-						/*Limit*/(/*{ concurrency: 1 },*/ async function (f) {
-							try {
-								let a = await (await FsEntry.findOrCreate(f)).getArtefact();
-								if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
-									debug(`populateAudio: a=${inspect(a)}`); 
-									if (!a.audio) {
-										await a.addMetaData('audio', {});
-									}
-									if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
-										await a.audio.loadMetadata(a.file);	
-									}
-									if (a.audio && (a.audio.isNew || a.audio.isModified)) {
-										debug(`populateAudio: a2=${inspect(a)}`);
-									}
-									await a.save();	//bulkSave
+						emitter(
+							File.watch([], { fullDocument: 'updateLookup' }),
+							{ event: 'change' },
+							change => { 
+								debug(`File.watch this=${inspect(this)} change=${inspect(change)}`);
+								return FsEntry.hydrate(change.fullDocument);
+							}))) {			///*Limit*/(/*{ concurrency: 1 },*/ async function (f) {
+						try {
+							let a = await (await FsEntry.findOrCreate(f)).getArtefact();
+							if (a.file && (/^.*\.(wav|mp3|mp4|au|flac)$/i).test(a.file.path)) {
+								debug(`populateAudio: a=${inspect(a)}`); 
+								if (!a.audio) {
+									await a.addMetaData('audio', {});
 								}
-							} catch (e) {
-								debug(`warn for audio: f=${inspect(f)} ${e.stack||e}`);	
+								if (a.audio.isNew || !a.audio.isCheckedSince(a.file._ts.updatedAt)) {
+									await a.audio.loadMetadata(a.file);	
+								}
+								if (a.audio && (a.audio.isNew || a.audio.isModified)) {
+									debug(`populateAudio: a2=${inspect(a)}`);
+								}
+								await a.save();	//bulkSave
 							}
-						}));
-				} catch (e) {
-					debug(`error for audio: ${e.stack||e}`);
-				}
+						} catch (e) {
+							debug(`warn for audio: f=${inspect(f)} ${e.stack||e}`);	
+						}
+					}
+				// } catch (e) {
+				// 	debug(`error for audio: ${e.stack||e}`);
+				// }
 				app.logStats();
 			}
 
