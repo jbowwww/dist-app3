@@ -1,5 +1,82 @@
-190320
+191208
 
+Wow I know I lost a few notes switching branches at some point but been awhile since notes
+Maybe evaluate whats below here sometime?
+
+For now here's another idea, relating to Artefacts, associating the component aspects/types(/whatever name) together,
+knowing which types to try and load for any given Artefact and how to minimise loading of types not applicable to a given Artefact (either because the Artefact type doesn't logically support that type, or because the pipeline doesn't require oit, or..?) -
+
+	** Lazy loading Artefact types(/aspects?) **
+
+Solves all the above considerations, potentially very nicely, also regardless of what type of iteration is used to implement a pipeline i.e. for await or a pipe() function (on Artefact container type or standalone, whatever..)
+
+The artefact container type composed of types/aspects (e.g. File, Audio) starts off as simply a container, which straight away has at least (or always?) one aspect/type added to it - either by query from DB, or by creating the aspect instance directly (e.g. new File(..) .. queries can be singular result or multiple results, creation may also happen from a source/stream by way of e.g. new FsIterable(..) simple enough so far
+
+This artefact (either a singular, or each data object emitted from stream) then gets fed into the start of an arbitrary pipeline (again, could be either for await style or some kind of pipe(..) method for a more declarative style) and the pipeline will either operate only on the existing aspect (simple case is simple), OR it may check for, update, create (or delete is another case not quite considered here yet, should be easy enough anyway) additional aspects on the Artefact. Here comes the special sauce..
+
+The existing aspect is existing, it's already a document, it's there . Any ADDITIONAL aspects referenced can be LAZY LOADED transparently by Artefact container, on-demand, which means
+	- Checks for existence of an aspect is implicitly done - on return the aspect as a property, it resolves to either the appropriate document, or comes back as null/undefined, so a simple truthy test is all that is needed (no a.addMetaData('audio') ugly boiletplate - if it does exist, now it is implicitly already set on (and cached by) the Artefact instance and ready to inspect/operate on further
+
+So ideal syntax would be something like
+	Artefact(
+		File.find({ extension: 'mp3' }),
+		a => {
+			if (!a.audio || a.audio.updatedSince(a.file.stats.mtime)) {
+				a.audio.loadMetadata(a.file)
+				if (a.audio.length < 10 && a.file.path.contains('/mystuff/')) {
+					a.tags.isMoozikSample = true
+					// maybe further processing
+				}
+			}
+		})
+
+Or maybe still better looking in a for await
+	for await (const a of Artefact( File.find({ extension: 'mp3' }) ) {
+		if (!a.audio || a.audio.updatedSince(a.file.stats.mtime)) {
+			a.audio.loadMetadata(a.file)
+			if (a.audio.length < 10 && a.file.path.contains('/mystuff/')) {
+				a.tags.isMoozikSample = true
+				// maybe further processing
+			}
+		}
+	}
+
+^ don't forget this still needs a try {} catch {} around at least the inner loop(for cano--nical use-case) to prevent exceptions exploding the process (or for now just causing UnhandlePromiseException) - I don't think a try/catch around the yield keyword in source will work the same / at all (check this though) =
+
+Either way should work, still have standard need/want to declare pipelines once and use on multiple sources, without (necessarily) having to build pipelines first, store them into some variable and THEN exec query/stremable source and feed to pipeline. i.e. something like current index-new-2 with the combine()
+
+--
+Thought, now that I've written the above -
+Doesn't really seem to change a whole bunch at all, although lazy-loading may still be good, particularly in terms of which mongo collections to query - It might be beneficial if could still somehow pre-load (ie at Artefact container creation time,
+not on-demand lazy load) referenced aspect types - in terms of performance - but no easy way to tell what aspect types will be referenced (unless pipeline specification syntax was very rigid and highly detailed e.g. object keys pipe stages / reducers by their required aspect types, rather than generic streaming approaches - that I think I prefer)
+
+--
+Another thought
+- A user program shouldn't have to define tasks (processes, threads, simple Promises, whatever) manually for operations that are
+pretty intrinsic (although possibly optional in many cases) to their relevant aspect type, or type(s) additionally required (e.g. audio requires file [unless direct in memory samples supported in future for whyever reason])
+- A user program should though be able to *specify* 
+	* which of aspect types get loaded (ie at runtime - enabling support as needed by user code)
+	* How those processes are run (e.g. processes, threads, simple async/promises, possibly process using CLI)
+	* Arbitrary code run on construct/find (is find to general and used by too many other more specific operations??)
+	* Standard but optional operations intrinsic to aspect type(s) (types plural if multiple types are prerequisite, operation still is intrinsic to one type) that are run on some event - construct, update, ? e.g. File.doHash()
+	* ..? forgot..:/
+
+--
+Thought additional to directly above
+- That all sounds like it kind of already done, yet just seems too much boiletplate still
+- Maybe just try to simplify small parts of the execution jobs, e.g.
+	emitter(File.watch([], { fullDocument: 'updateLookup' }), { event: 'change' },
+	change => { 
+		debug(`change=${inspect(change)}`);
+		return FsEntry.hydrate(change.fullDocument);
+	}) )) {
+ ^ this could easily be defined on the model, called something like File.stream()
+ - Initially probably use it with a hardcoded { fullDocument: 'updateLookup' } because this gives all properties of an aspect to be available when needed. If only updated properties, would only be (?) narrow use-cases for, e.g. just notification to user of what has been changed. Anything else would get complex quickly checking for property existence
+ - The emitter() functionality is hidden inside this .stream() method, and it's mapFn i.e. change => (change.fullDoocment)
+- it is now homogenous with the File.find() above it and presumably other model methods, so can be used in a simple combine() relative easily, simply and cleanly (syntax-wise)
+  ^ So maybe start with just that (make emitter(model.watch(...)) a model method
+    
+190320
 Check stats counting on bulkSave, see below 2x as many calls as validate
 
 190220:082227.771 31251 app [V] mongoose.models count=6 names=partition, fs, dir, file, disk, audio
